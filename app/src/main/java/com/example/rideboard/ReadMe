@@ -1,0 +1,3 @@
+25-10-14-23.28 réécriture de LocationService avec "by lazy" // annulé
+25-10-15-22-24 debut réecriture de RideScreen.kt pour ajouter deux boutons  //OK
+25-10-18-15-32 réécriture de RideViewModel (et RideScreen ?) pour passer à à une seule fonction "calculateScreenValues"
