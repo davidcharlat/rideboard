@@ -36,7 +36,7 @@ object FitExporter {
     }
 
     fun export(context: Context, rideFile: File) {
-        val outputDir = context.filesDir
+        val outputDir = context.getExternalFilesDir(null)  //context.filesDir
         val fitOutputFile = File(outputDir, "ride.fit")
         val encode = FileEncoder(fitOutputFile, Fit.ProtocolVersion.V2_0)
 

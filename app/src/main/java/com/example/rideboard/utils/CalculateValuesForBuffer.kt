@@ -1743,6 +1743,7 @@ fun calculateNewSlope (bufferSnapshot: List<GpsSample>, newVerticalSpeed: Double
     val slopeA26 = 100.0 * deltaAlt26 / (deltaT26 * hSpeed26)
     val slopeA27 = 100.0 * deltaAlt27 / (deltaT27 * hSpeed27)
     val slopeA28 = 100.0 * deltaAlt28 / (deltaT28 * hSpeed28)
+    val minSpeed = minOf(hSpeed22,hSpeed23,hSpeed24,hSpeed25,hSpeed26,hSpeed27,hSpeed28)
 
     val hasGpsSource = bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointAltitudeSourceMntMnsOrGps == "GPS" ||
                         bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointAltitudeSourceMntMnsOrGps == "GPS" ||
@@ -1751,12 +1752,12 @@ fun calculateNewSlope (bufferSnapshot: List<GpsSample>, newVerticalSpeed: Double
                         bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointAltitudeSourceMntMnsOrGps == "GPS" ||
                         bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointAltitudeSourceMntMnsOrGps == "GPS"
 
-    val percentToChange = if (altitudeProbability > 1.0) 0.5
-                        else if (altitudeProbability > 0.6) 0.3
-                        else if (altitudeProbability > 0.1) 0.2
-                        else if (altitudeProbability > 0.01) 0.1
-                        else if (altitudeProbability > 0.0001) 0.05
-                        else if (altitudeProbability > 0.0000001) 0.03
+    val percentToChange = if (altitudeProbability > 1.0 && minSpeed > 10.0) 0.5
+                        else if (altitudeProbability > 0.6 && minSpeed > 6.0) 0.3
+                        else if (altitudeProbability > 0.1 && minSpeed > 4.0) 0.2
+                        else if (altitudeProbability > 0.01 && minSpeed > 2.0) 0.1
+                        else if (altitudeProbability > 0.0001 && minSpeed > 1.0) 0.05
+                        else if (altitudeProbability > 0.0000001 && minSpeed > 0.6) 0.03
                         else 0.02
     if (newDisplayedSpeed < 0.2 || hSpeed22 < 0.2) return previousSlope
     else if (hasGpsSource || newDisplayedSpeed < 0.4) {
