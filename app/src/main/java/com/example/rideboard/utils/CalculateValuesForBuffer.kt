@@ -5,6 +5,7 @@ import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
 import java.io.File
+import java.lang.Double.isNaN
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -45,23 +46,7 @@ fun calculateValuesForBuffer(
 )  {
 
     if (buffer.size < 3) return
-    //cree un header dans gps_debug.txt
-    if (buffer.size == 3) {
 
-        (File(context.filesDir, "gps_debug.txt")).writeText("")
-        (File(context.filesDir, "ride.tsv")).writeText("")
-        (File(context.filesDir, "ride.fit")).delete()
-        (File(context.filesDir, "ride.gpx")).delete()
-        (File(context.filesDir, "ride.tcx")).delete()
-        appendDebugLog(
-        context,
-        "gps accuracy\talt source\talt accuracy\talt probability\talt\tdisplayed alt\tvertical speed\tdisplayed vertical speed\tdisplayed vertical speed2\tdisplayed speed\t" +
-                "last alt lidar mnt\tlast alt lidar mns\tlast alt ign\tlast alt srtm\t" +
-                "\talt mnt new gps pt\talt mns new gps pt\talt gps new gps pt\tduration high spread\tnew slope"
-    )}
-
-    val start=System.currentTimeMillis()
-    //fin de création du header
     val sample = buffer.getNthBeforeLast(2)?:return
     val previousSample = buffer.getNthBeforeLast(3)?:return
     val bufferSnapshot = buffer.getAll()
@@ -97,25 +82,44 @@ fun calculateValuesForBuffer(
     val previousGpsPointLastDifferentLidarMnt = previousGpsPoint.gpsPointLastDifferentLidarMnt
     val previousGpsPointLastDifferentLidarMns = previousGpsPoint.gpsPointLastDifferentLidarMns
     val previousGpsPointLastDifferentIgn = previousGpsPoint.gpsPointLastDifferentIgn
-    val previousGpsPointDurationTime = previousGpsPoint.gpsPointDurationTime
-    val previousGpsPointTotalDistance = previousGpsPoint.gpsPointTotalDistance
+    var previousGpsPointDurationTime = previousGpsPoint.gpsPointDurationTime
+    var previousGpsPointTotalDistance = previousGpsPoint.gpsPointTotalDistance
     val previousGpsPointMaxSpeed = previousGpsPoint.gpsPointMaxSpeed
     val previousMinSlope = previousGpsPoint.gpsPointMinSlope
     val previousMaxSlope = previousGpsPoint.gpsPointMaxSlope
-    val previousSlope = previousGpsPoint.gpsPointSlope
+    val previousSlope = if (isNaN(previousGpsPoint.gpsPointSlope)) 0.0 else previousGpsPoint.gpsPointSlope
     val previousMaxAltitude = previousGpsPoint.gpsPointMaxAltitude
     val previousMinAltitude = previousGpsPoint.gpsPointMinAltitude
     val previousMaxVerticalSpeed = previousGpsPoint.gpsPointMaxVerticalSpeed
     val previousMinVerticalSpeed = previousGpsPoint.gpsPointMinVerticalSpeed
     val previousAltForElevationGain = previousGpsPoint.gpsPointAltForElevationGain
-    val previousElevationGain = previousGpsPoint.gpsPointElevationGain
+    var previousElevationGain = previousGpsPoint.gpsPointElevationGain
+
+    if (buffer.size == 3 || (previousGpsPointDurationTime < 100 && previousGpsPointTotalDistance == 0.0)) {
+        val rideFile = File(context.filesDir, "ride.tsv")
+        if (rideFile.exists()) {
+            try {
+                val lines = rideFile.readLines()
+                if (lines.size > 2) {
+                    val lastLine = lines.last()
+                    val tokens = lastLine.split("\t")
+                    if (tokens.size >= 8) {
+                        previousElevationGain = tokens[4].toDoubleOrNull() ?: previousElevationGain
+                        previousGpsPointDurationTime = tokens[5].toDoubleOrNull()?.let { (it * 1000.0).toLong() } ?: previousGpsPointDurationTime
+                        previousGpsPointTotalDistance = tokens[7].toDoubleOrNull() ?: previousGpsPointTotalDistance
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
     val previousGpsPointScreenValueString = previousGpsPoint.gpsPointScreenValueString?:"      "
 
 
     val deltaTimeInSecond = /*if (previousIsMoving) */ (newGpsPoint.timestamp - previousTime).toDouble() / 1000.0
                             //else (newGpsPoint.timestamp - previousTime).toDouble() / 500.0 + 4.0
     val newCumulatedGpsPrecision = calculateNewCumulatedGpsPrecision (newGpsPoint, previousCumulatedGpsPrecision)
-
 
     if (!newIsStarted && newCumulatedGpsPrecision >1) {
         // startNewScreenValues (bufferSnapshot)
@@ -240,10 +244,6 @@ fun calculateValuesForBuffer(
         return
     }
 
-    val time1 = System.currentTimeMillis()
-    // from here isStarted must be true, (otherwise calculateScreenValues already returned)
-    // newIsStarted = true
-
     val newGpsPointLastDifferentSrtm = run {
         val roundedLat = roundToNearestStep(sample.latitude, 5000)
         val roundedLon = roundToNearestStep(sample.longitude, 5000)
@@ -352,7 +352,7 @@ fun calculateValuesForBuffer(
             alt = previousSample.altitudeIgn
         )
     }
-    //pour les fonction suivante ajouter dans le retour la lititude et la longitude du point (changer coordinatet x or nul)
+
     val foundLastAltitudeLidarMnt = findLastAltitudeMnt(bufferSnapshot, previousDurationAltitudeNotMnt, previousVerticalSpeed, previousSpeed)
     val foundLastAltitudeLidarMns = findLastAltitudeMns(bufferSnapshot, previousDurationAltitudeNotMnt, previousVerticalSpeed, previousSpeed)
     val foundLastAltitudeIgn = findLastAltitudeIgn(bufferSnapshot, previousDurationAltitudeNotMnt, previousVerticalSpeed, previousSpeed)
@@ -648,237 +648,7 @@ fun calculateValuesForBuffer(
     val newDisplayedAltitude = if (newAltitude == null || previousDisplayedAltitude == null) newAltitude
             else {newAltitude * 0.08 + previousDisplayedAltitude * 0.92 + 0.92 * newDisplayedVerticalSpeed * deltaTimeInSecond}
     val newDisplayedSpeed = calculateDisplayedSpeed (bufferSnapshot[max(0,bufferSnapshot.size - 5)], bufferSnapshot[max(0,bufferSnapshot.size - 4)],previousGpsPoint, newGpsPoint, latestGpsPoint, previousDisplayedSpeed,newSpeed)
-    val unusedSlope = try {
-        val changingSource = run{
-            val s2 = if (newAltitudeSourceMntMnsOrGps == "MNT" || newAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s3 = if (previousAltitudeSourceMntMnsOrGps == "MNT" || previousAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s4 = if (bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointAltitudeSourceMntMnsOrGps == "MNT" || bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s5 = if (bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointAltitudeSourceMntMnsOrGps == "MNT" || bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s6 = if (bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointAltitudeSourceMntMnsOrGps == "MNT" || bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s7 = if (bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointAltitudeSourceMntMnsOrGps == "MNT" || bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            val s8 = if (bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointAltitudeSourceMntMnsOrGps == "MNT" || bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointAltitudeSourceMntMnsOrGps == "MNS") "mnt" else "gps"
-            1.0 + (if (s2 == s3) 0.0 else 1.0) + (if (s3 == s4) 0.0 else 1.0) + (if (s4 == s5) 0.0 else 1.0) + (if (s5 == s6) 0.0 else 1.0) + (if (s6 == s7) 0.0 else 1.0) + (if (s7 == s8) 0.0 else 1.0)
-        }
-        val highSpread = (1.0 + min(5.0,max(0.0,newDurationHighSpreadAltitude.toDouble()-1.0))
-                + min(5.0,max(0.0,previousDurationHighSpreadAltitude.toDouble()-2.0))
-                + min(5.0,max(0.0,(bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDurationHighSpreadAltitude.toDouble()-2.0)/2.0))
-                + min(5.0,max(0.0,(bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDurationHighSpreadAltitude.toDouble()-2.0)/3.0))
-                + min(5.0,max(0.0,(bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDurationHighSpreadAltitude.toDouble()-2.0)/4.0)) )
-        val avgSpeed = (newDisplayedSpeed + previousDisplayedSpeed + bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedSpeed + bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedSpeed)/4.0
-        val vSpeed3 = (previousVerticalSpeed + newVerticalSpeed)/2.0
-        val vSpeed4 = ((bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointVerticalSpeed) + 2.0 * vSpeed3)/3.0
-        val vSpeed5 = ((bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointVerticalSpeed) + 3.0 * vSpeed4)/4.0
-        val vSpeed6 = ((bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointVerticalSpeed) + 4.0 * vSpeed5)/5.0
-        val vSpeed7 = ((bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointVerticalSpeed) + 5.0 * vSpeed6)/6.0
-        val vSpeed8 = ((bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointVerticalSpeed) + 6.0 * vSpeed7)/7.0
-       /*
-        val deltaAlt3 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaAlt4 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaAlt5 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaAlt6 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaAlt7 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaAlt8 = - ((bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointDisplayedAltitude)?:0.0) + (newDisplayedAltitude?:((bufferSnapshot[max(0,bufferSnapshot.size - 8)].gpsPointDisplayedAltitude)?:0.0))
-        val deltaT3 = (bufferSnapshot[max(0,bufferSnapshot.size - 3)].timestamp) - (newGpsPoint.timestamp)
-        val deltaT4 = (bufferSnapshot[max(0,bufferSnapshot.size - 4)].timestamp) - (newGpsPoint.timestamp)
-        val deltaT5 = (bufferSnapshot[max(0,bufferSnapshot.size - 5)].timestamp) - (newGpsPoint.timestamp)
-        val deltaT6 = (bufferSnapshot[max(0,bufferSnapshot.size - 6)].timestamp) - (newGpsPoint.timestamp)
-        val deltaT7 = (bufferSnapshot[max(0,bufferSnapshot.size - 7)].timestamp) - (newGpsPoint.timestamp)
-        val deltaT8 = (bufferSnapshot[max(0,bufferSnapshot.size - 8)].timestamp) - (newGpsPoint.timestamp)
 
-        */
-        val speed3 = (previousDisplayedSpeed + newDisplayedSpeed) / 2.0
-        val speed4 = ((bufferSnapshot[max(
-            0,
-            bufferSnapshot.size - 4
-        )].gpsPointDisplayedSpeed) + 2.0 * speed3) / 3.0
-        val speed5 = ((bufferSnapshot[max(
-            0,
-            bufferSnapshot.size - 5
-        )].gpsPointDisplayedSpeed) + 3.0 * speed4) / 4.0
-        val speed6 = ((bufferSnapshot[max(
-            0,
-            bufferSnapshot.size - 6
-        )].gpsPointDisplayedSpeed) + 4.0 * speed5) / 5.0
-        val speed7 = ((bufferSnapshot[max(
-            0,
-            bufferSnapshot.size - 7
-        )].gpsPointDisplayedSpeed) + 5.0 * speed6) / 6.0
-        val speed8 = ((bufferSnapshot[max(
-            0,
-            bufferSnapshot.size - 8
-        )].gpsPointDisplayedSpeed) + 6.0 * speed7) / 7.0
-
-        val hSpeed3 = sqrt(speed3 * speed3 - vSpeed3 * vSpeed3)
-        val hSpeed4 = sqrt(speed4 * speed4 - vSpeed4 * vSpeed4)
-        val hSpeed5 = sqrt(speed5 * speed5 - vSpeed5 * vSpeed5)
-        val hSpeed6 = sqrt(speed6 * speed6 - vSpeed6 * vSpeed6)
-        val hSpeed7 = sqrt(speed7 * speed7 - vSpeed7 * vSpeed7)
-        val hSpeed8 = sqrt(speed8 * speed8 - vSpeed8 * vSpeed8)
-
-        val minSpeed = minOf(newDisplayedSpeed, speed3, speed4, speed5, speed6, speed7, speed8)
-        val maxToKeep = min(
-            0.66,
-            minSpeed / 15.0
-        ) / (if (newAltitudeSourceMntMnsOrGps == "GPS" || previousAltitudeSourceMntMnsOrGps == "GPS") 5.0 else max(
-            min(5.0, altitudeMntMnsAccuracy),
-            1.0
-        ))
-
-        if (minSpeed < 0.2 || newDisplayedSpeed < previousDisplayedSpeed / 2.0 || previousDisplayedSpeed < bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 3
-            )].gpsPointDisplayedSpeed / 2.0 || !bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 3
-            )].gpsPointIsMoving || !bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 4
-            )].gpsPointIsMoving || !bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 5
-            )].gpsPointIsMoving || !bufferSnapshot[max(0, bufferSnapshot.size - 6)].gpsPointIsMoving
-            )
-            {
-                appendDebugLog(
-                    context,
-                    "speed<0.2\t" +
-                            "\t"
-                )
-
-                previousSlope
-
-            }
-        else if (minSpeed < 2.0 || newDisplayedSpeed < previousDisplayedSpeed / 1.5 || previousDisplayedSpeed < bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 3
-            )].gpsPointDisplayedSpeed / 1.5
-        ) {
-            val bestSlope = ((listOf(
-                (newDisplayedVerticalSpeed * 100 * deltaTimeInSecond / newHorizontalDistanceDone + previousSlope) / 2.0,
-                //(previousSlope + 2.0 * newDisplayedVerticalSpeed / sqrt((newDisplayedSpeed + 0.00001)*(newDisplayedSpeed + 0.00001) - newDisplayedVerticalSpeed*newDisplayedVerticalSpeed))/3.0,
-                //(previousSlope + 2.0 * newDisplayedVerticalSpeed / sqrt((avgSpeed + 0.00001)*(avgSpeed + 0.00001)-newDisplayedVerticalSpeed*newDisplayedVerticalSpeed))/3.0,
-                100 * vSpeed3 / hSpeed3,
-                100 * vSpeed4 / hSpeed4,
-                100 * vSpeed5 / hSpeed5,
-                100 * vSpeed6 / hSpeed6,
-                100 * vSpeed7 / hSpeed7,
-                100 * vSpeed8 / hSpeed8
-            ).minByOrNull { abs(it - previousSlope / 1.05) }) ?: 0.0)
-            val percentToChange =
-                if ((0 < bestSlope && bestSlope < previousSlope) || (bestSlope < 0 && previousSlope < bestSlope)) min(
-                    maxToKeep / 2.0,altitudeProb.pow(0.1)
-                )
-                else min(maxToKeep / 2.0, altitudeProb.pow(0.1)) / (highSpread * changingSource)
-
-            appendDebugLog(
-                context,
-                "speed<2\t${bestSlope}" +
-                        "\t${percentToChange}"
-            )
-
-            bestSlope * percentToChange + previousSlope * (1 - percentToChange)
-        } else if (minSpeed < 3.0 || newDisplayedSpeed < previousDisplayedSpeed / 1.15 || previousDisplayedSpeed < bufferSnapshot[max(
-                0,
-                bufferSnapshot.size - 3
-            )].gpsPointDisplayedSpeed / 1.15
-        ) {
-            run {
-                try {
-                    val slope22 =
-                        100 * newVerticalSpeed / sqrt(newDisplayedSpeed * newDisplayedSpeed - newDisplayedVerticalSpeed * newDisplayedVerticalSpeed)
-                    val slope33 = 100 * vSpeed3 / hSpeed3
-                    val slope44 = 100 * vSpeed4 / hSpeed4
-                    val slope34 = 100 * vSpeed3 / hSpeed4
-                    val slope24 = 100 * newVerticalSpeed / hSpeed4
-                    val slope23 = 100 * newVerticalSpeed / hSpeed3
-                    val slope25 = 100 * newVerticalSpeed / hSpeed5
-                    val slope35 = 100 * vSpeed3 / hSpeed5
-                    val slope45 = 100 * vSpeed4 / hSpeed5
-                    val slope26 = 100 * newVerticalSpeed / hSpeed6
-                    val slope36 = 100 * vSpeed3 / hSpeed6
-                    val slope46 = 100 * vSpeed4 / hSpeed6
-                    val bestSlope =
-                        ((listOf(slope22, slope33,
-                            slope44,
-                            slope34,
-                            slope24,
-                            slope23,
-                            slope25,
-                            slope35,
-                            slope45,
-                            slope26,
-                            slope36,
-                            slope46,
-                        ).minByOrNull { abs(it - previousSlope / 1.1) })
-                            ?: 0.0)
-                    val percentToChange =
-                        if ((0 < bestSlope && bestSlope < previousSlope) || (bestSlope < 0 && previousSlope < bestSlope)) min(
-                            maxToKeep,
-                            altitudeProb.pow(0.1)
-                        )
-                        else min(maxToKeep, altitudeProb.pow(0.1)) / (highSpread * changingSource)
-
-                    appendDebugLog(
-                        context,
-                        "speed<3\t${bestSlope}" +
-                                "\t${percentToChange}"
-                    )
-
-
-                    bestSlope * percentToChange + previousSlope * (1 - percentToChange)
-                } catch (e: Exception) {
-                    previousSlope
-                }
-            }
-        } else {
-            run {
-                try {
-                    val slope22 =
-                        100 * newVerticalSpeed / sqrt(newDisplayedSpeed * newDisplayedSpeed - newDisplayedVerticalSpeed * newDisplayedVerticalSpeed)
-                    val slope33 = 100 * vSpeed3 / hSpeed3
-                    val slope44 = 100 * vSpeed4 / hSpeed4
-                    val slope34 = 100 * vSpeed3 / hSpeed4
-                    val slope24 = 100 * newVerticalSpeed / hSpeed4
-                    val slope23 = 100 * newVerticalSpeed / hSpeed3
-                    val slope25 = 100 * newVerticalSpeed / hSpeed5
-                    val slope35 = 100 * vSpeed3 / hSpeed5
-                    val bestSlope = ((listOf(
-                        // (newDisplayedVerticalSpeed * deltaTimeInSecond / newHorizontalDistanceDone + previousSlope)/2.0,
-                        /*
-                        (previousSlope + 3.0 * newDisplayedVerticalSpeed / sqrt((newDisplayedSpeed + 0.00001)*(newDisplayedSpeed + 0.00001) - newDisplayedVerticalSpeed*newDisplayedVerticalSpeed))/4.0,
-                        (previousSlope + 3.0 * newDisplayedVerticalSpeed / sqrt((avgSpeed + 0.00001)*(avgSpeed + 0.00001)-newDisplayedVerticalSpeed*newDisplayedVerticalSpeed))/4.0,
-                        1000.0 * deltaAlt3 / (deltaT3 * hSpeed3),
-                        1000.0 * deltaAlt4 / (deltaT4 * hSpeed4),
-                        1000.0 * deltaAlt5 / (deltaT5 * hSpeed5),
-                        1000.0 * deltaAlt6 / (deltaT6 * hSpeed6),
-                         */
-                        slope22, slope33, slope44, slope34, slope24, slope23, slope25, slope35,
-                    ).minByOrNull { abs(it - previousSlope / 1.1) }) ?: 0.0)
-                    val percentToChange =
-                        if ((0 < bestSlope && bestSlope < previousSlope) || (bestSlope < 0 && previousSlope < bestSlope)) min(
-                            maxToKeep,
-                            altitudeProb.pow(0.1)
-                        ) else min(maxToKeep, altitudeProb.pow(0.1)) / (highSpread * changingSource)
-
-                    appendDebugLog(
-                        context,
-                        "speed>3\t${bestSlope}" +
-                                "\t${percentToChange}"
-                    )
-
-                    bestSlope * percentToChange + previousSlope * (1 - percentToChange)
-                } catch (e: Exception) {
-                    previousSlope
-                }
-            }
-            /*
-            ((listOf(
-                vSpeed3 / hSpeed3,
-                vSpeed4 / hSpeed4,
-                vSpeed5 / hSpeed5
-            ).minByOrNull { abs(it) }) ?: 0.0) * 66.6 + previousSlope / 3.0*/
-            }
-            } catch (e: Exception) {previousSlope}
     val newSlope = calculateNewSlope(bufferSnapshot, newVerticalSpeed, newAltitude, newDisplayedSpeed,altitudeProb)
     val newAltForElevationGain = if (newDisplayedAltitude == null) null
         else if (previousAltForElevationGain == null) (newDisplayedAltitude)
@@ -1626,7 +1396,7 @@ fun calculateNewHorizontalDistanceDone (
         )/speedCorrectionRatio
         val gpsUncertainty = newPoint.accuracy.toDouble() + 0.05
         val functionForDistanceAccordingToGpsAccuracy = { x: Double ->
-            1 / ((distanceToNewPointProjectedOnNewDir - x) * (distanceToNewPointProjectedOnNewDir - x) / (gpsUncertainty * gpsUncertainty) + 1)
+            1 / ((distanceToNewPointProjectedOnNewDir - x) * (distanceToNewPointProjectedOnNewDir - x) / (3.0 * gpsUncertainty * gpsUncertainty) + 1)
         }
 
         val functionForDistanceAccordingToGpsPoints = { x: Double ->

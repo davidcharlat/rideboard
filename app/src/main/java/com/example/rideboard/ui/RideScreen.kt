@@ -1,14 +1,21 @@
 package com.example.rideboard.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.view.MotionEvent
+import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -27,6 +34,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.rideboard.RideViewModel
@@ -34,7 +42,11 @@ import com.example.rideboard.config.AppConfig
 import com.example.rideboard.service.LocationService
 import com.example.rideboard.utils.FitExporter
 import com.example.rideboard.utils.ScreenValues
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.sin
+import kotlin.math.cos
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -44,24 +56,88 @@ import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.net.toUri
 
+// pour la maps
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import com.example.rideboard.R
+import androidx.core.content.ContextCompat
+import kotlin.math.asin
+import kotlin.math.atan2
+
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.ui.graphics.RectangleShape
+
+
 @Composable
 fun RideScreen(
     rideViewModel: RideViewModel = viewModel()
 ) {
     val screenValues by rideViewModel.screenValues
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var isntOver by remember { mutableStateOf(true) }
     var isRecording by remember { mutableStateOf(AppConfig.isRecording) }
-    var showStravaUpload by remember {
-        mutableStateOf(false)
+    var isToggleBlocked by remember { mutableStateOf(false) }
+    var isExporting by remember { mutableStateOf(false) }
+    var showStravaUpload by remember { mutableStateOf(false) }
+
+    if (isExporting) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                androidx.compose.material3.CircularProgressIndicator(color = Color.Green)
+                Spacer(Modifier.height(16.dp))
+                Text("Génération du fichier .fit...", color = Color.White)
+            }
+        }
+        return
     }
 
     if (showStravaUpload) {
-        LaunchedEffect(Unit) {
-            FitExporter.exportInGpx(context, File(context.filesDir, "ride.tsv"))
-        }
-        StravaUploadScreen()
+        //LaunchedEffect(Unit) { FitExporter.exportInGpx(context, File(context.filesDir, "ride.tsv")) }
+        StravaUploadScreen(
+            onContinueRide = {
+                showStravaUpload = false
+                isntOver = true // relance le tracking GPS si besoin
+            },
+            onExportElsewhere = {
+                val fitFile = File(context.getExternalFilesDir(null), "ride.fit")
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    fitFile
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/octet-stream"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Export .fit"))
+            },
+            onDone = {
+                // L'utilisateur confirme manuellement, ou upload déjà détecté automatiquement
+               // (context as? Activity)?.finish()
+                (File(context.filesDir, "gps_debug.txt")).writeText("")
+                (File(context.filesDir, "ride.tsv")).writeText("")
+                (File(context.filesDir, "ride.fit")).delete()
+                (File(context.filesDir, "ride.gpx")).delete()
+                (File(context.filesDir, "ride.tcx")).delete()
+                context.stopService(Intent(context, LocationService::class.java))
+                (context as? Activity)?.finish()
+            }
+        )
         return
     }
 
@@ -76,42 +152,46 @@ fun RideScreen(
         bottomBar = {
             RideBottomBar(
                 isntOver = isntOver,
+                isToggleBlocked = isToggleBlocked,
                 isRecording = isRecording,
                 onToggleGps = {
-                    val intent = Intent(context, LocationService::class.java)
-                    isntOver = !isntOver
+                    if (isToggleBlocked) {} else {
+                        val intent = Intent(context, LocationService::class.java)
+                        isntOver = !isntOver
 
-                    if (!isntOver) {
-                        showStravaUpload = true
-                        FitExporter.export(
-                            context,
-                            File(context.filesDir, "ride.tsv")
-                        )
+                        if (!isntOver) {
+                            isExporting = true
+                            scope.launch(Dispatchers.IO) {
+                                FitExporter.export(
+                                    context,
+                                    File(context.filesDir, "ride.tsv")
+                                )
+                                isExporting = false
+                                showStravaUpload = true
+                            }
 
-                        //les 4 lignes suivantes pour ouvrir l'import de strava
-                        /*val intent = Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse("https://www.strava.com/upload/select")
-                        )*/
-
-                        //context.startActivity(intent)
-
-                        //shareFitFile(context) //<- ca c'est pour partager le fichier fit
-
-
-                        // la suite c'était avant le test d'export vers strava
-                        //FitExporter.export(context, File(context.filesDir, "ride.tsv"))
-                        //FitExporter.exportInGpx(context, File(context.filesDir, "ride.tsv"))
-                        //FitExporter.exportInTcx(context, File(context.filesDir, "ride.tsv"))
-                        //context.stopService(intent)
+                            // la suite c'était avant le test d'export vers strava
+                            //FitExporter.export(context, File(context.filesDir, "ride.tsv"))
+                            //FitExporter.exportInGpx(context, File(context.filesDir, "ride.tsv"))
+                            //FitExporter.exportInTcx(context, File(context.filesDir, "ride.tsv"))
+                            //context.stopService(intent)
+                        } else
+                            context.startForegroundService(intent)
                     }
-                    else
-                        context.startForegroundService(intent)
-
-
+                },
+                onToggleBlocked = {
+                    isToggleBlocked = !isToggleBlocked
+                   // AppConfig.isToggleBlocked = !AppConfig.isToggleBlocked
                 },
                 onToggleRecording = {
+                    if (isToggleBlocked) {} else
                     AppConfig.isRecording = !AppConfig.isRecording
+                    val action = if (AppConfig.isRecording) LocationService.ACTION_START_UPDATES else LocationService.ACTION_STOP_UPDATES
+                    val serviceIntent = Intent(context, LocationService::class.java).apply {
+                        this.action = action
+                    }
+                    // On envoie l'action au service déjà lancé
+                    context.startService(serviceIntent)
                 }
             )
         }
@@ -119,7 +199,8 @@ fun RideScreen(
 
         RideContent(
             modifier = Modifier.padding(padding),
-            screenValues = screenValues
+            screenValues = screenValues,
+            isToggleBlocked = isToggleBlocked
         )
     }
 }
@@ -127,7 +208,8 @@ fun RideScreen(
 @Composable
 fun RideContent(
     modifier: Modifier,
-    screenValues: ScreenValues
+    screenValues: ScreenValues,
+    isToggleBlocked: Boolean
 ) {
     var currentTime by remember {
         mutableLongStateOf(System.currentTimeMillis())
@@ -150,7 +232,7 @@ fun RideContent(
     ) {
 
         //-------------------------------------------------------
-        // Zone carte (vide pour l'instant)
+        // Zone carte
         //-------------------------------------------------------
 
         Box(
@@ -159,10 +241,18 @@ fun RideContent(
                 .fillMaxWidth()
                 .padding(1.dp)
                 .border(1.dp, Color.DarkGray)
-        )
+        ) {
+            MapScreen(
+                latitude = screenValues.latitude?: 0.0,
+                longitude = screenValues.longitude?: 0.0,
+                direction = screenValues.direction?: (3.1416/2.0),
+                isToggleBlocked = isToggleBlocked,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         //-------------------------------------------------------
-        // 6 rectangles
+        // 8 rectangles
         //-------------------------------------------------------
 
         Column(
@@ -183,7 +273,6 @@ fun RideContent(
                     primaryValues = listOf("%.1f km/h".format(screenValues.speed * 3.6)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "km/h",
                     secondaryValues = listOf("Moy %.1f".format((screenValues.averageSpeed?:0.0) * 3.6),
                     "Max %.1f".format(screenValues.maxSpeed * 3.6))
                 )
@@ -194,7 +283,6 @@ fun RideContent(
                     primaryValues = listOf(formatTime(currentTime)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "",
                     secondaryValues = listOf(formatDate(currentTime))
 
                 )
@@ -212,7 +300,6 @@ fun RideContent(
                     primaryValues = listOf(formatDuration(screenValues.durationSeconds.toInt())),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "",
                     secondaryValues = listOf("%.2f km".format(screenValues.distance / 1000.0))
 
                 )
@@ -223,7 +310,6 @@ fun RideContent(
                     primaryValues = listOf("%.1f m".format(screenValues.altitude)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "m",
                     secondaryValues = listOf("Min %.1f".format(screenValues.minAltitude),
                     "Max %.1f".format(screenValues.maxAltitude))
                 )
@@ -241,7 +327,6 @@ fun RideContent(
                     primaryValues = listOf("%.1f ".format(screenValues.slope) + " %  " + screenValues.screenValueString),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "%",
                     secondaryValues = listOf("Min %.1f".format(screenValues.minSlope),
                     "Max %.1f".format(screenValues.maxSlope))
                 )
@@ -252,7 +337,6 @@ fun RideContent(
                     primaryValues = listOf("%.1f m".format(screenValues.elevationGain)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "m & m/s",
                     secondaryValues = listOf("dénivelé cumulé"),
 
                 )
@@ -269,7 +353,6 @@ fun RideContent(
                     primaryValues = listOf(screenValues.directionString),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "%",
                     secondaryValues = listOf("direction")
                 )
 
@@ -279,7 +362,6 @@ fun RideContent(
                     primaryValues = listOf("↑: %.2f m/s".format(screenValues.verticalSpeed)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    unit = "m & m/s",
                     secondaryValues = listOf("%.2f ".format(screenValues.minVerticalSpeed), " %.2f".format(screenValues.maxVerticalSpeed)),
 
                     )
@@ -294,15 +376,15 @@ fun MetricCard(
     primaryValues: List<String>,
     primaryFont: TextUnit,
     secondaryFont: TextUnit,
-    unit: String,
     secondaryValues: List<String>
 ) {
     val textMeasurer = rememberTextMeasurer()
 
     Card(
         modifier = modifier
-            .padding(2.dp)
+            .padding(0.dp)
             .fillMaxHeight(),
+        shape = RectangleShape,
         colors = CardDefaults.cardColors(
             containerColor = Color.Black
         )
@@ -312,8 +394,8 @@ fun MetricCard(
             modifier = Modifier
                 .fillMaxSize()
                 .border(1.dp, Color.DarkGray)
-                .padding(2.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(0.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)
         ) {
 
             // ---------------- PRIMARY ----------------
@@ -376,33 +458,61 @@ fun MetricCard(
 @Composable
 fun RideBottomBar(
     isntOver: Boolean,
+    isToggleBlocked: Boolean,
     isRecording: Boolean,
     onToggleGps: () -> Unit,
+    onToggleBlocked: () -> Unit,
     onToggleRecording: () -> Unit
 ) {
-
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.Black)
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly
+            .height(34.dp)
     ) {
+        val buttonWidth = maxWidth * 0.25f
 
-        Button(
-            onClick = onToggleGps
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(if (isntOver) "Finir" else "Démarrer GPS")
-        }
+            Button(
+                onClick = onToggleGps,
+                modifier = Modifier.width(buttonWidth),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                Text(
+                    text = if (isntOver) "Finir" else "Démarrer GPS",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-        Button(
-            onClick = onToggleRecording,
-            colors = ButtonDefaults.buttonColors(
-                containerColor =
-                    if (isRecording) Color.Red else Color.Green
-            )
-        ) {
-            Text(if (isRecording) "Pause" else "Enregistrer")
+            Button(
+                onClick = onToggleBlocked,
+                modifier = Modifier.size(20.dp),
+                contentPadding = PaddingValues(0.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isToggleBlocked) Color.Red else Color.Green
+                )
+            ) { }
+
+            Button(
+                onClick = onToggleRecording,
+                modifier = Modifier.width(buttonWidth),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRecording) Color.Red else Color.Green
+                )
+            ) {
+                Text(
+                    text = if (isRecording) "Pause" else "Enregistrer",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -512,7 +622,160 @@ fun AutoSizeRow(
         }
     }
 }
-// test pour exporter le fit:
+
+@Composable
+fun MapScreen(
+    latitude: Double,
+    longitude: Double,
+    direction: Double, // -pi..pi, 0=est, pi/2=nord
+    isToggleBlocked: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    val mapView = remember {
+                MapView(context).apply {
+                    setTileSource(TileSourceFactory.OpenTopo)  //MAPNIK
+                    setMultiTouchControls(true)
+                    controller.setZoom(15.0)
+
+                        // mapOrientation reste à sa valeur par défaut (0 = nord en haut)
+                    }
+                }
+
+    LaunchedEffect(isToggleBlocked) {
+        mapView.setMultiTouchControls(!isToggleBlocked)
+    }
+    val positionMarker = remember {
+        Marker(mapView).apply {
+            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+            icon = ContextCompat.getDrawable(context, R.drawable.ic_position_arrow)
+            setFlat(false) // reste orientée vers le haut de l'écran, ne suit PAS la rotation de la carte
+            setInfoWindow(null) // pas de popup au clic
+        }
+    }
+
+    DisposableEffect(mapView, positionMarker) {
+        mapView.overlays.add(positionMarker)
+        onDispose { mapView.overlays.remove(positionMarker) }
+    }
+
+    var autoRecenter by remember { mutableStateOf(true) }
+
+    LaunchedEffect(latitude, longitude, direction, autoRecenter) {
+        val compassBearing = mathAngleToCompassBearing(direction)
+
+        positionMarker.position = GeoPoint(latitude, longitude)
+        positionMarker.rotation = compassBearing.toFloat() // la flèche pointe selon le cap réel
+        mapView.invalidate()
+
+        if (autoRecenter) {
+            mapView.controller.setCenter(GeoPoint(latitude, longitude))
+        }
+    }
+
+    LaunchedEffect(latitude, longitude, direction, autoRecenter) {
+        // val compassBearing = mathAngleToCompassBearing(direction)
+        // mapView.mapOrientation = compassBearing.toFloat() // la carte tourne selon le cap réel
+
+        positionMarker.position = GeoPoint(latitude, longitude)
+        mapView.invalidate() // force le redessin
+
+        if (autoRecenter) {
+            mapView.controller.setCenter(GeoPoint(latitude, longitude))
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { mapView.onDetach() }
+    }
+
+    DisposableEffect(mapView, positionMarker) {
+        mapView.overlays.add(positionMarker)
+        onDispose { mapView.overlays.remove(positionMarker) }
+    }
+
+
+    DisposableEffect(mapView, isToggleBlocked) {
+        val touchListener = View.OnTouchListener(fun(_: View, event: MotionEvent): Boolean {
+            if (isToggleBlocked) return true // bloque tout geste simple (drag)
+            if (event.action == MotionEvent.ACTION_MOVE) {
+                autoRecenter = false
+            }
+            return false
+        })
+        mapView.setOnTouchListener(touchListener)
+        onDispose { mapView.setOnTouchListener(null) }
+    }
+
+    Box(modifier = modifier) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { mapView }
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(8.dp)
+        ) {
+            IconButton(onClick = { if (!isToggleBlocked) mapView.controller.zoomIn() }) {
+                Icon(Icons.Default.Add, contentDescription = "Zoom +")
+            }
+            IconButton(onClick = { if (!isToggleBlocked) mapView.controller.zoomOut() }) {
+                Icon(Icons.Default.Remove, contentDescription = "Zoom -")
+            }
+        }
+
+        if (!autoRecenter) {
+            IconButton(
+                onClick = { if (!isToggleBlocked) autoRecenter = true },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            ) {
+                Icon(Icons.Default.MyLocation, contentDescription = "Recentrer")
+            }
+        }
+
+        // Flèches de déplacement : la carte étant fixe (nord en haut),
+        // elles redeviennent Nord/Sud/Est/Ouest, pas relatives au cap
+  /*      val panStep = 30.0
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(8.dp)
+        ) {
+            IconButton(onClick = {
+                autoRecenter = false
+                val c = mapView.mapCenter
+                mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 0.0, panStep))
+            }) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Nord") }
+
+            Row {
+                IconButton(onClick = {
+                    autoRecenter = false
+                    val c = mapView.mapCenter
+                    mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 270.0, panStep))
+                }) { Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Ouest") }
+
+                IconButton(onClick = {
+                    autoRecenter = false
+                    val c = mapView.mapCenter
+                    mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 90.0, panStep))
+                }) { Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Est") }
+            }
+
+            IconButton(onClick = {
+                autoRecenter = false
+                val c = mapView.mapCenter
+                mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 180.0, panStep))
+            }) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Sud") }
+        }*/
+    }
+}
+
+//test pour expoter le fit:
 fun shareFitFile(context: Context) {
 
     val fitFile = File(context.filesDir, "ride.fit")
@@ -540,4 +803,32 @@ fun shareFitFile(context: Context) {
         Intent.createChooser(intent, "Partager l'activité")
     )
 }
+
+fun mathAngleToCompassBearing(angleRad: Double): Float {
+    val angleDeg = Math.toDegrees(angleRad)
+    val bearing =  angleDeg - 90.0
+    return ((bearing % 360.0 + 360.0) % 360.0).toFloat()
+}
+
+// --- Calcul d'un point de destination à partir d'un cap et d'une distance (formule sphérique) ---
+fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeters: Double): GeoPoint {
+    val earthRadius = 6371000.0
+    val bearingRad = Math.toRadians(bearingDeg)
+    val lat1 = Math.toRadians(lat)
+    val lon1 = Math.toRadians(lon)
+
+    val lat2 = asin(
+        sin(lat1) * cos(distanceMeters / earthRadius) +
+                cos(lat1) * sin(distanceMeters / earthRadius) * cos(bearingRad)
+    )
+    val lon2 = lon1 + atan2(
+        sin(bearingRad) * sin(distanceMeters / earthRadius) * cos(lat1),
+        cos(distanceMeters / earthRadius) - sin(lat1) * sin(lat2)
+    )
+
+    return GeoPoint(Math.toDegrees(lat2), Math.toDegrees(lon2))
+}
+
+
+
 //*/

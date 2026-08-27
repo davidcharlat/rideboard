@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit
 
 object AppConfig {
     // Variables globales
+    //var isToggleBlocked: Boolean = false
     var isLidarHdAvailable: Boolean = true
     var isIgnAvailable: Boolean = true
     var isRecording by mutableStateOf(true)

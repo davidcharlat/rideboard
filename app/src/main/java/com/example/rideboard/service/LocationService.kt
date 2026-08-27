@@ -26,6 +26,11 @@ import kotlin.math.sin
 
 class LocationService : Service() {
 
+    companion object {
+        const val ACTION_START_UPDATES = "com.example.rideboard.action.START_UPDATES"
+        const val ACTION_STOP_UPDATES = "com.example.rideboard.action.STOP_UPDATES"
+    }
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationRequest: LocationRequest
     private lateinit var locationCallback: LocationCallback
@@ -127,13 +132,26 @@ class LocationService : Service() {
     }
     @RequiresPermission(allOf = [Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION])
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("LocationService", "Service démarré")
+        Log.d("LocationService", "onStartCommand reçu: ${intent?.action}")
 
-        try {
-            startForeground(1, createNotification())
-            startLocationUpdates()
-        } catch (e: Exception) {
-            Log.e("LocationService", "Erreur au démarrage du service", e)
+        when (intent?.action) {
+            ACTION_STOP_UPDATES -> {
+                stopLocationUpdates()
+                Log.d("LocationService", "Updates GPS arrêtées")
+            }
+            ACTION_START_UPDATES -> {
+                startLocationUpdates()
+                Log.d("LocationService", "Updates GPS démarrées")
+            }
+            else -> {
+                // Comportement par défaut (démarrage initial)
+                try {
+                    startForeground(1, createNotification())
+                    startLocationUpdates()
+                } catch (e: Exception) {
+                    Log.e("LocationService", "Erreur au démarrage du service", e)
+                }
+            }
         }
 
         return START_STICKY
