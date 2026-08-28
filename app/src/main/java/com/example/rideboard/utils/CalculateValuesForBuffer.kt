@@ -85,11 +85,11 @@ fun calculateValuesForBuffer(
     var previousGpsPointDurationTime = previousGpsPoint.gpsPointDurationTime
     var previousGpsPointTotalDistance = previousGpsPoint.gpsPointTotalDistance
     val previousGpsPointMaxSpeed = previousGpsPoint.gpsPointMaxSpeed
-    val previousMinSlope = previousGpsPoint.gpsPointMinSlope
-    val previousMaxSlope = previousGpsPoint.gpsPointMaxSlope
+    val previousMinSlope = if (latestGpsPoint.gpsPointStringToReset == "minSlope" || newGpsPoint.gpsPointStringToReset == "minSlope") 0.0 else previousGpsPoint.gpsPointMinSlope
+    val previousMaxSlope = if (latestGpsPoint.gpsPointStringToReset == "maxSlope" || newGpsPoint.gpsPointStringToReset == "maxSlope") 0.0 else previousGpsPoint.gpsPointMaxSlope
     val previousSlope = if (isNaN(previousGpsPoint.gpsPointSlope)) 0.0 else previousGpsPoint.gpsPointSlope
-    val previousMaxAltitude = previousGpsPoint.gpsPointMaxAltitude
-    val previousMinAltitude = previousGpsPoint.gpsPointMinAltitude
+    val previousMaxAltitude = if (latestGpsPoint.gpsPointStringToReset == "maxAltitude" || newGpsPoint.gpsPointStringToReset == "maxAltitude") null else previousGpsPoint.gpsPointMaxAltitude
+    val previousMinAltitude = if (latestGpsPoint.gpsPointStringToReset == "minAltitude" || newGpsPoint.gpsPointStringToReset == "minAltitude") null else previousGpsPoint.gpsPointMinAltitude
     val previousMaxVerticalSpeed = previousGpsPoint.gpsPointMaxVerticalSpeed
     val previousMinVerticalSpeed = previousGpsPoint.gpsPointMinVerticalSpeed
     val previousAltForElevationGain = previousGpsPoint.gpsPointAltForElevationGain

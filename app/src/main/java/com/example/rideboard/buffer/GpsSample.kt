@@ -55,6 +55,7 @@ data class GpsSample(
     var gpsPointMinAltitude: Double? = null,
     var gpsPointElevationGain: Double = 0.0,
     var gpsPointAltForElevationGain: Double? = null,
+    var gpsPointStringToReset: String = "",
 
     var gpsPointScreenValueDouble1: Double? = 0.0,
     var gpsPointScreenValueDouble2: Double? = 0.0,

@@ -75,6 +75,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalDensity
 
 
 @Composable
@@ -184,14 +185,16 @@ fun RideScreen(
                    // AppConfig.isToggleBlocked = !AppConfig.isToggleBlocked
                 },
                 onToggleRecording = {
-                    if (isToggleBlocked) {} else
-                    AppConfig.isRecording = !AppConfig.isRecording
-                    val action = if (AppConfig.isRecording) LocationService.ACTION_START_UPDATES else LocationService.ACTION_STOP_UPDATES
-                    val serviceIntent = Intent(context, LocationService::class.java).apply {
-                        this.action = action
+                    if (!isToggleBlocked) {
+                        AppConfig.isRecording = !AppConfig.isRecording
+                        val action =
+                            if (AppConfig.isRecording) LocationService.ACTION_START_UPDATES else LocationService.ACTION_STOP_UPDATES
+                        val serviceIntent = Intent(context, LocationService::class.java).apply {
+                            this.action = action
+                        }
+                        // On envoie l'action au service déjà lancé
+                        context.startService(serviceIntent)
                     }
-                    // On envoie l'action au service déjà lancé
-                    context.startService(serviceIntent)
                 }
             )
         }
@@ -215,6 +218,8 @@ fun RideContent(
         mutableLongStateOf(System.currentTimeMillis())
     }
 
+    var zoomedCard by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(Unit) {
         while (true) {
             currentTime = System.currentTimeMillis()
@@ -232,7 +237,7 @@ fun RideContent(
     ) {
 
         //-------------------------------------------------------
-        // Zone carte
+        // Zone carte ou ResetView
         //-------------------------------------------------------
 
         Box(
@@ -242,13 +247,21 @@ fun RideContent(
                 .padding(1.dp)
                 .border(1.dp, Color.DarkGray)
         ) {
-            MapScreen(
-                latitude = screenValues.latitude?: 0.0,
-                longitude = screenValues.longitude?: 0.0,
-                direction = screenValues.direction?: (3.1416/2.0),
-                isToggleBlocked = isToggleBlocked,
-                modifier = Modifier.fillMaxSize()
-            )
+            if (zoomedCard == null) {
+                MapScreen(
+                    latitude = screenValues.latitude ?: 0.0,
+                    longitude = screenValues.longitude ?: 0.0,
+                    direction = screenValues.direction ?: (3.1416 / 2.0),
+                    isToggleBlocked = isToggleBlocked,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                SpecificView(
+                    cardName = zoomedCard!!,
+                    screenValues = screenValues,
+                    currentTime = currentTime
+                )
+            }
         }
 
         //-------------------------------------------------------
@@ -274,7 +287,8 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Moy %.1f".format((screenValues.averageSpeed?:0.0) * 3.6),
-                    "Max %.1f".format(screenValues.maxSpeed * 3.6))
+                    "Max %.1f".format(screenValues.maxSpeed * 3.6)),
+                    onClick = { zoomedCard = "Speed" }
                 )
 
                 MetricCard(
@@ -283,8 +297,8 @@ fun RideContent(
                     primaryValues = listOf(formatTime(currentTime)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    secondaryValues = listOf(formatDate(currentTime))
-
+                    secondaryValues = listOf(formatDate(currentTime)),
+                    onClick = { zoomedCard = "Time" }
                 )
             }
 
@@ -300,8 +314,8 @@ fun RideContent(
                     primaryValues = listOf(formatDuration(screenValues.durationSeconds.toInt())),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    secondaryValues = listOf("%.2f km".format(screenValues.distance / 1000.0))
-
+                    secondaryValues = listOf("%.2f km".format(screenValues.distance / 1000.0)),
+                    onClick = { zoomedCard = "DurationDistance" }
                 )
 
                 MetricCard(
@@ -311,7 +325,8 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Min %.1f".format(screenValues.minAltitude),
-                    "Max %.1f".format(screenValues.maxAltitude))
+                    "Max %.1f".format(screenValues.maxAltitude)),
+                    onClick = { zoomedCard = "Altitude" }
                 )
             }
 
@@ -328,7 +343,8 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Min %.1f".format(screenValues.minSlope),
-                    "Max %.1f".format(screenValues.maxSlope))
+                    "Max %.1f".format(screenValues.maxSlope)),
+                    onClick = { zoomedCard = "Slope" }
                 )
 
                 MetricCard(
@@ -338,7 +354,7 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("dénivelé cumulé"),
-
+                    onClick = { zoomedCard = "Elevation" }
                 )
             }
             Row(
@@ -353,7 +369,11 @@ fun RideContent(
                     primaryValues = listOf(screenValues.directionString),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
-                    secondaryValues = listOf("direction")
+                    secondaryValues = listOf("direction"),
+                    onClick = { 
+                        if (zoomedCard != null) zoomedCard = null 
+                        else zoomedCard = "Direction" 
+                    }
                 )
 
                 MetricCard(
@@ -363,7 +383,7 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("%.2f ".format(screenValues.minVerticalSpeed), " %.2f".format(screenValues.maxVerticalSpeed)),
-
+                    onClick = { zoomedCard = "VerticalSpeed" }
                     )
             }
         }
@@ -376,7 +396,8 @@ fun MetricCard(
     primaryValues: List<String>,
     primaryFont: TextUnit,
     secondaryFont: TextUnit,
-    secondaryValues: List<String>
+    secondaryValues: List<String>,
+    onClick: () -> Unit = {}
 ) {
     val textMeasurer = rememberTextMeasurer()
 
@@ -387,7 +408,8 @@ fun MetricCard(
         shape = RectangleShape,
         colors = CardDefaults.cardColors(
             containerColor = Color.Black
-        )
+        ),
+        onClick = onClick
     ) {
 
         Column(
@@ -829,6 +851,127 @@ fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeter
     return GeoPoint(Math.toDegrees(lat2), Math.toDegrees(lon2))
 }
 
+@Composable
+fun SpecificView(
+    cardName: String,
+    screenValues: ScreenValues,
+    currentTime: Long
+) {
+    val items = when (cardName) {
+        "Speed" -> listOf(
+            "Vitesse" to "%.1f km/h".format(screenValues.speed * 3.6) to "Speed",
+            "Moyenne" to "%.1f km/h".format((screenValues.averageSpeed ?: 0.0) * 3.6) to "averageSpeed",
+            "Maximum" to "%.1f km/h".format(screenValues.maxSpeed * 3.6) to "maxSpeed"
+        )
+        "Time" -> listOf(
+            "Heure" to formatTime(currentTime) to "Time",
+            "Date" to formatDate(currentTime) to "Date"
+        )
+        "DurationDistance" -> listOf(
+            "Durée" to formatDuration(screenValues.durationSeconds.toInt()) to "Duration",
+            "Distance" to "%.2f km".format(screenValues.distance / 1000.0) to "Distance"
+        )
+        "Altitude" -> listOf(
+            "Altitude" to "%.1f m".format(screenValues.altitude) to "Altitude",
+            "Min" to "%.1f m".format(screenValues.minAltitude) to "minAltitude",
+            "Max" to "%.1f m".format(screenValues.maxAltitude) to "maxAltitude"
+        )
+        "Slope" -> listOf(
+            "Pente" to "%.1f %%".format(screenValues.slope) to "Slope",
+            "Min" to "%.1f %%".format(screenValues.minSlope) to "minSlope",
+            "Max" to "%.1f %%".format(screenValues.maxSlope) to "maxSlope"
+        )
+        "Elevation" -> listOf(
+            "D+" to "%.1f m".format(screenValues.elevationGain) to "ElevationGain"
+        )
+        "Direction" -> listOf(
+            "Direction" to screenValues.directionString to "Direction"
+        )
+        "VerticalSpeed" -> listOf(
+            "V. Speed" to "%.2f m/s".format(screenValues.verticalSpeed) to "VerticalSpeed",
+            "Min" to "%.2f m/s".format(screenValues.minVerticalSpeed) to "minVerticalSpeed",
+            "Max" to "%.2f m/s".format(screenValues.maxVerticalSpeed) to "maxVerticalSpeed"
+        )
+        else -> emptyList()
+    }
 
+        val textMeasurer = rememberTextMeasurer()
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Spacer(Modifier.height(8.dp))
+            items.forEach { (labels, resetValue) ->
+                val (label, displayValue) = labels
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f) // chaque rectangle occupe une part égale de la hauteur restante
+                        .background(Color.DarkGray.copy(alpha = 0.3f))
+                        //.border(1.dp, Color.Gray)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BoxWithConstraints(
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                        val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                        // Taille max bornée à la fois par la hauteur du bloc et par la largeur du texte
+                        val maxLabelFont = with(LocalDensity.current) { (availableHeightPx * 0.25f).toSp() }
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.5f).toSp() }
+
+                        val labelFont = computeFontSize(
+                            textMeasurer = textMeasurer,
+                            values = listOf(label),
+                            availableWidthPx = availableWidthPx,
+                            maxFontSize = maxLabelFont,
+                            minFontSize = 6.sp
+                        )
+                        val valueFont = computeFontSize(
+                            textMeasurer = textMeasurer,
+                            values = listOf(displayValue),
+                            availableWidthPx = availableWidthPx,
+                            maxFontSize = maxValueFont,
+                            minFontSize = 8.sp
+                        )
+
+                        Column {
+                            Text(
+                                text = "$label   ",
+                                color = Color.Gray,
+                                fontSize = labelFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "$displayValue   ",
+                                color = Color.White,
+                                fontSize = valueFont,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = resetValue
+                        },
+                        modifier = Modifier.size(20.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    ) {
+                    }
+                }
+            }
+        }
+    }
 
 //*/
