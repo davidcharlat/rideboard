@@ -6,18 +6,20 @@ import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
 import java.io.File
 import java.lang.Double.isNaN
+import java.lang.Math.pow
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.pow
 
-const val MIN_SPEED = 0.2
-const val STEP_FOR_ELEVATION_GAIN = 1.0
+const val MIN_SPEED = 0.1
+const val STEP_FOR_ELEVATION_GAIN = 0.1
 
 data class Coordinates(
     var x: Double,
@@ -84,16 +86,38 @@ fun calculateValuesForBuffer(
     val previousGpsPointLastDifferentIgn = previousGpsPoint.gpsPointLastDifferentIgn
     var previousGpsPointDurationTime = previousGpsPoint.gpsPointDurationTime
     var previousGpsPointTotalDistance = previousGpsPoint.gpsPointTotalDistance
-    val previousGpsPointMaxSpeed = previousGpsPoint.gpsPointMaxSpeed
+    val previousGpsPointMaxSpeed = if (latestGpsPoint.gpsPointStringToReset == "maxSpeed" || newGpsPoint.gpsPointStringToReset == "maxSpeed") 0.0 else previousGpsPoint.gpsPointMaxSpeed
     val previousMinSlope = if (latestGpsPoint.gpsPointStringToReset == "minSlope" || newGpsPoint.gpsPointStringToReset == "minSlope") 0.0 else previousGpsPoint.gpsPointMinSlope
     val previousMaxSlope = if (latestGpsPoint.gpsPointStringToReset == "maxSlope" || newGpsPoint.gpsPointStringToReset == "maxSlope") 0.0 else previousGpsPoint.gpsPointMaxSlope
     val previousSlope = if (isNaN(previousGpsPoint.gpsPointSlope)) 0.0 else previousGpsPoint.gpsPointSlope
     val previousMaxAltitude = if (latestGpsPoint.gpsPointStringToReset == "maxAltitude" || newGpsPoint.gpsPointStringToReset == "maxAltitude") null else previousGpsPoint.gpsPointMaxAltitude
     val previousMinAltitude = if (latestGpsPoint.gpsPointStringToReset == "minAltitude" || newGpsPoint.gpsPointStringToReset == "minAltitude") null else previousGpsPoint.gpsPointMinAltitude
-    val previousMaxVerticalSpeed = previousGpsPoint.gpsPointMaxVerticalSpeed
-    val previousMinVerticalSpeed = previousGpsPoint.gpsPointMinVerticalSpeed
+    val previousMaxVerticalSpeed = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed") 0.0 else previousGpsPoint.gpsPointMaxVerticalSpeed
+    val previousMinVerticalSpeed = if (latestGpsPoint.gpsPointStringToReset == "minVerticalSpeed" || newGpsPoint.gpsPointStringToReset == "minVerticalSpeed") 0.0 else previousGpsPoint.gpsPointMinVerticalSpeed
     val previousAltForElevationGain = previousGpsPoint.gpsPointAltForElevationGain
     var previousElevationGain = previousGpsPoint.gpsPointElevationGain
+    var previousPartialElevationGain = if (latestGpsPoint.gpsPointStringToReset == "ElevationGain" || newGpsPoint.gpsPointStringToReset == "ElevationGain") 0.0
+        else if (latestGpsPoint.gpsPointStringToReset == "ElevationGainRenewed" || newGpsPoint.gpsPointStringToReset == "ElevationGainRenewed") previousElevationGain
+        else previousGpsPoint.partialElevationGain
+    var previousPartialDurationTime = if (latestGpsPoint.gpsPointStringToReset == "Duration" || newGpsPoint.gpsPointStringToReset == "Duration") 0
+        else if (latestGpsPoint.gpsPointStringToReset == "DurationRenewed" || newGpsPoint.gpsPointStringToReset == "DurationRenewed") previousGpsPointDurationTime
+        else previousGpsPoint.partialDurationTime
+    var previousPartialDistance = if (latestGpsPoint.gpsPointStringToReset == "Distance" || newGpsPoint.gpsPointStringToReset == "Distance") 0.0
+        else if (latestGpsPoint.gpsPointStringToReset == "DistanceRenewed" || newGpsPoint.gpsPointStringToReset == "DistanceRenewed") previousGpsPointTotalDistance
+        else previousGpsPoint.partialDistance
+    var previousPartialDurationTimeForAverageSpeed = if (latestGpsPoint.gpsPointStringToReset == "averageSpeed" || newGpsPoint.gpsPointStringToReset == "averageSpeed") 0
+        else if (latestGpsPoint.gpsPointStringToReset == "averageSpeedRenewed" || newGpsPoint.gpsPointStringToReset == "averageSpeedRenewed") previousPartialDurationTime
+        else previousGpsPoint.partialDurationTimeForAverageSpeed
+    var previousPartialDistanceForAverageSpeed = if (latestGpsPoint.gpsPointStringToReset == "averageSpeed" || newGpsPoint.gpsPointStringToReset == "averageSpeed") 0.0
+        else if (latestGpsPoint.gpsPointStringToReset == "averageSpeedRenewed" || newGpsPoint.gpsPointStringToReset == "averageSpeedRenewed") previousPartialDistance
+        else previousGpsPoint.partialDistanceForAverageSpeed
+    val previousVerticalSpeed4 = if (latestGpsPoint.gpsPointStringToReset == "VerticalSpeed4" || newGpsPoint.gpsPointStringToReset == "VerticalSpeed4") 0.0 else previousGpsPoint.screenVerticalSpeed4
+    val previousVerticalSpeed15 = if (latestGpsPoint.gpsPointStringToReset == "VerticalSpeed15" || newGpsPoint.gpsPointStringToReset == "VerticalSpeed15") 0.0 else previousGpsPoint.screenVerticalSpeed15
+    val previousVerticalSpeed125 = if (latestGpsPoint.gpsPointStringToReset == "VerticalSpeed125" || newGpsPoint.gpsPointStringToReset == "VerticalSpeed125") 0.0 else previousGpsPoint.screenVerticalSpeed125
+    val previousVerticalSpeed1000 = if (latestGpsPoint.gpsPointStringToReset == "VerticalSpeed1000" || newGpsPoint.gpsPointStringToReset == "VerticalSpeed1000") 0.0 else previousGpsPoint.screenVerticalSpeed1000
+    val previousMaxVerticalSpeed15 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed15" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed15") 0.0 else previousGpsPoint.maxVerticalSpeed15
+    val previousMaxVerticalSpeed125 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed125" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed125") 0.0 else previousGpsPoint.maxVerticalSpeed125
+    val previousMaxVerticalSpeed1000 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed1000" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed1000") 0.0 else previousGpsPoint.maxVerticalSpeed1000
 
     if (buffer.size == 3 || (previousGpsPointDurationTime < 100 && previousGpsPointTotalDistance == 0.0)) {
         val rideFile = File(context.filesDir, "ride.tsv")
@@ -107,6 +131,11 @@ fun calculateValuesForBuffer(
                         previousElevationGain = tokens[4].toDoubleOrNull() ?: previousElevationGain
                         previousGpsPointDurationTime = tokens[5].toDoubleOrNull()?.let { (it * 1000.0).toLong() } ?: previousGpsPointDurationTime
                         previousGpsPointTotalDistance = tokens[7].toDoubleOrNull() ?: previousGpsPointTotalDistance
+                        previousPartialElevationGain = previousElevationGain
+                        previousPartialDurationTime = previousGpsPointDurationTime
+                        previousPartialDistance = previousGpsPointTotalDistance
+                        previousPartialDurationTimeForAverageSpeed = previousGpsPointDurationTime
+                        previousPartialDistanceForAverageSpeed = previousGpsPointTotalDistance
                     }
                 }
             } catch (e: Exception) {
@@ -241,6 +270,19 @@ fun calculateValuesForBuffer(
         sample.gpsPointMinVerticalSpeed = previousMinVerticalSpeed
         sample.gpsPointMaxVerticalSpeed = previousMaxVerticalSpeed
         sample.gpsPointScreenValueString = previousGpsPointScreenValueString
+        sample.partialDistance = previousPartialDistance
+        sample.partialDurationTime = previousPartialDurationTime
+        sample.partialDistanceForAverageSpeed = previousPartialDistanceForAverageSpeed
+        sample.partialDurationTimeForAverageSpeed = previousPartialDurationTimeForAverageSpeed
+        sample.partialElevationGain = previousPartialElevationGain
+        sample.screenVerticalSpeed4 = previousVerticalSpeed4 * (3.0/4.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed15 = previousVerticalSpeed15 * (14.0/15.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed125 = previousVerticalSpeed125 * (124.0/125.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed1000 = previousVerticalSpeed1000 * (999.0/1000.0).pow(deltaTimeInSecond)
+        sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
+        sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
+        sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
+
         return
     }
 
@@ -420,8 +462,18 @@ fun calculateValuesForBuffer(
         sample.gpsPointMinVerticalSpeed = previousMinVerticalSpeed
         sample.gpsPointMaxVerticalSpeed = previousMaxVerticalSpeed
         sample.gpsPointScreenValueString = previousGpsPointScreenValueString
-
-
+        sample.partialDistance = previousPartialDistance
+        sample.partialDurationTime = previousPartialDurationTime
+        sample.partialDistanceForAverageSpeed = previousPartialDistanceForAverageSpeed
+        sample.partialDurationTimeForAverageSpeed = previousPartialDurationTimeForAverageSpeed
+        sample.partialElevationGain = previousPartialElevationGain
+        sample.screenVerticalSpeed4 = previousVerticalSpeed4 * (3.0/4.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed15 = previousVerticalSpeed15 * (14.0/15.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed125 = previousVerticalSpeed125 * (124.0/125.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed1000 = previousVerticalSpeed1000 * (999.0/1000.0).pow(deltaTimeInSecond)
+        sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
+        sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
+        sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
 
         //sample.gpsPointScreenValueDouble1: Double? = 0.0,
         //sample.gpsPointScreenValueDouble2: Double? = 0.0,
@@ -479,6 +531,18 @@ fun calculateValuesForBuffer(
         sample.gpsPointMinVerticalSpeed = previousMinVerticalSpeed
         sample.gpsPointMaxVerticalSpeed = previousMaxVerticalSpeed
         sample.gpsPointScreenValueString = previousGpsPointScreenValueString
+        sample.partialDistance = previousPartialDistance
+        sample.partialDurationTime = previousPartialDurationTime
+        sample.partialDistanceForAverageSpeed = previousPartialDistanceForAverageSpeed
+        sample.partialDurationTimeForAverageSpeed = previousPartialDurationTimeForAverageSpeed
+        sample.partialElevationGain = previousPartialElevationGain
+        sample.screenVerticalSpeed4 = previousVerticalSpeed4 * (3.0/4.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed15 = previousVerticalSpeed15 * (14.0/15.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed125 = previousVerticalSpeed125 * (124.0/125.0).pow(deltaTimeInSecond)
+        sample.screenVerticalSpeed1000 = previousVerticalSpeed1000 * (999.0/1000.0).pow(deltaTimeInSecond)
+        sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
+        sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
+        sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
 
         //sample.gpsPointScreenValueDouble1: Double? = 0.0,
         //sample.gpsPointScreenValueDouble2: Double? = 0.0,
@@ -685,6 +749,12 @@ fun calculateValuesForBuffer(
         if (precise) (listOf(vSpeed3,vSpeed4,vSpeed5).minByOrNull { abs((it - previousDisplayedVerticalSpeed2)/1.1) }?:0.0)*0.25 + previousDisplayedVerticalSpeed2*0.75
             else (listOf(vSpeed3,vSpeed4,vSpeed5, vSpeed6, vSpeed7, vSpeed8).minByOrNull { abs((it - previousDisplayedVerticalSpeed2)/1.1) }?:0.0)*0.3 + previousDisplayedVerticalSpeed2*0.7
     }
+    val averagedVerticalSpeed2 = bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
+    bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
+    bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
+    bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
+    bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
+    previousDisplayedVerticalSpeed2/7.0 + newDisplayedVerticalSpeed2 /7.0
 
     sample.gpsPointSpeed = newSpeed
     sample.gpsPointAcceleration = newAcceleration
@@ -723,22 +793,6 @@ fun calculateValuesForBuffer(
         else max(previousMaxAltitude,newDisplayedAltitude)
     sample.gpsPointMinAltitude = if (previousMinAltitude == null || newDisplayedAltitude == null) newDisplayedAltitude
         else min(previousMinAltitude,newDisplayedAltitude)
-    sample.gpsPointMaxVerticalSpeed = max(
-        bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + previousDisplayedVerticalSpeed2/7.0 + newDisplayedVerticalSpeed2 /7.0,
-        previousMaxVerticalSpeed)
-    sample.gpsPointMinVerticalSpeed = min(
-        bufferSnapshot[max(0,bufferSnapshot.size - 7)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedVerticalSpeed2 / 7.0
-                + previousDisplayedVerticalSpeed2/7.0 + newDisplayedVerticalSpeed2 /7.0,
-        previousMinVerticalSpeed)
     sample.gpsPointElevationGain = newElevationGain
     sample.gpsPointAltForElevationGain = newAltForElevationGain
     sample.gpsPointScreenValueString = if (altitudeProb > 1.0 ) "||||||"
@@ -748,6 +802,28 @@ fun calculateValuesForBuffer(
         else if (altitudeProb > 0.0001) "||    "
         else if (altitudeProb > 0.0000001) "|     "
         else "      "
+    sample.partialDistance = previousPartialDistance + newSpeed * deltaTimeInSecond
+    sample.partialDurationTime = previousPartialDurationTime + min((deltaTimeInSecond*1000).toLong(),(newHorizontalDistanceDone*1000.0/MIN_SPEED).toLong())
+    sample.partialDistanceForAverageSpeed = previousPartialDistanceForAverageSpeed + newSpeed * deltaTimeInSecond
+    sample.partialDurationTimeForAverageSpeed = previousPartialDurationTimeForAverageSpeed + min((deltaTimeInSecond*1000).toLong(),(newHorizontalDistanceDone*1000.0/MIN_SPEED).toLong())
+    sample.partialElevationGain = previousPartialElevationGain + newElevationGain - previousElevationGain
+    sample.screenVerticalSpeed4 = run { val kept = (3.0/4.0).pow(deltaTimeInSecond)
+        previousVerticalSpeed4 * kept + averagedVerticalSpeed2 * (1.0 - kept)
+    }
+    sample.gpsPointMaxVerticalSpeed = max(sample.screenVerticalSpeed4, previousMaxVerticalSpeed)
+    sample.gpsPointMinVerticalSpeed = min(sample.screenVerticalSpeed4, previousMinVerticalSpeed)
+    sample.screenVerticalSpeed15 = run { val kept = (14.0/15.0).pow(deltaTimeInSecond)
+        previousVerticalSpeed15 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+    }
+    sample.screenVerticalSpeed125 = run { val kept = (124.0/125.0).pow(deltaTimeInSecond)
+        previousVerticalSpeed125 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+    }
+    sample.screenVerticalSpeed1000 = run { val kept = (999.0/1000.0).pow(deltaTimeInSecond)
+        previousVerticalSpeed1000 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+    }
+    sample.maxVerticalSpeed15 = max(previousMaxVerticalSpeed15, sample.screenVerticalSpeed15)
+    sample.maxVerticalSpeed125 = max(previousMaxVerticalSpeed125, sample.screenVerticalSpeed125)
+    sample.maxVerticalSpeed1000 = max(previousMaxVerticalSpeed1000, sample.screenVerticalSpeed1000)
 
     sample.gpsPointScreenValueDouble1=latestGpsPoint.altitudeGps
     sample.gpsPointScreenValueDouble2 = expectedDistance

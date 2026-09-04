@@ -8,6 +8,7 @@ import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
@@ -19,7 +20,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -74,6 +74,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
 
@@ -255,11 +256,54 @@ fun RideContent(
                     isToggleBlocked = isToggleBlocked,
                     modifier = Modifier.fillMaxSize()
                 )
-            } else {
+            }
+            else if (zoomedCard == "Speed")
+            {
                 SpecificView(
                     cardName = zoomedCard!!,
                     screenValues = screenValues,
-                    currentTime = currentTime
+                    currentTime = currentTime,
+                    numberOfValues = 3,
+                    resetBoutons = listOf(0,2,1,0,0,0)
+                )
+            }
+            else if (zoomedCard == "DurationDistance" || zoomedCard == "Elevation")
+            {
+                SpecificView(
+                    cardName = zoomedCard!!,
+                    screenValues = screenValues,
+                    currentTime = currentTime,
+                    numberOfValues = 2,
+                    resetBoutons = listOf(2,2,0,0,0,0)
+                )
+            }
+            else if (zoomedCard == "Altitude" || zoomedCard == "Slope")
+            {
+                SpecificView(
+                    cardName = zoomedCard!!,
+                    screenValues = screenValues,
+                    currentTime = currentTime,
+                    numberOfValues = 3,
+                    resetBoutons = listOf(0,1,1,0,0,0)
+                )
+            }
+            else if (zoomedCard == "VerticalSpeed")
+            {
+                VerticalSpeedView(
+                    cardName = zoomedCard!!,
+                    screenValues = screenValues,
+                    currentTime = currentTime,
+                    numberOfValues = 7,
+                    resetBoutons = listOf(0,1,1,0,0,0,0,0,0)
+                )
+            }
+            else{
+                SpecificView(
+                    cardName = zoomedCard!!,
+                    screenValues = screenValues,
+                    currentTime = currentTime,
+                    numberOfValues = 3,
+                    resetBoutons = listOf(0,0,0,0,0,0,0)
                 )
             }
         }
@@ -855,12 +899,15 @@ fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeter
 fun SpecificView(
     cardName: String,
     screenValues: ScreenValues,
-    currentTime: Long
+    currentTime: Long,
+    numberOfValues: Int,
+    resetBoutons: List<Int>
+
 ) {
     val items = when (cardName) {
         "Speed" -> listOf(
             "Vitesse" to "%.1f km/h".format(screenValues.speed * 3.6) to "Speed",
-            "Moyenne" to "%.1f km/h".format((screenValues.averageSpeed ?: 0.0) * 3.6) to "averageSpeed",
+            "Moyenne" to "%.2f km/h".format((screenValues.averageSpeed ?: 0.0) * 3.6) to "averageSpeed",
             "Maximum" to "%.1f km/h".format(screenValues.maxSpeed * 3.6) to "maxSpeed"
         )
         "Time" -> listOf(
@@ -890,7 +937,11 @@ fun SpecificView(
         "VerticalSpeed" -> listOf(
             "V. Speed" to "%.2f m/s".format(screenValues.verticalSpeed) to "VerticalSpeed",
             "Min" to "%.2f m/s".format(screenValues.minVerticalSpeed) to "minVerticalSpeed",
-            "Max" to "%.2f m/s".format(screenValues.maxVerticalSpeed) to "maxVerticalSpeed"
+            "Max" to "%.2f m/s".format(screenValues.maxVerticalSpeed) to "maxVerticalSpeed",
+            "Sprint" to "%.2f m/s".format(screenValues.verticalSpeed4) to "verticalSpeed4",
+            "Résistance" to "%.2f m/s".format(screenValues.verticalSpeed15) to "verticalSpeed15",
+            "seuil" to "%.2f m/s".format(screenValues.verticalSpeed125) to "verticalSpeed125",
+            "endurance" to "%.2f m/s".format(screenValues.verticalSpeed1000) to "verticalSpeed1000"
         )
         else -> emptyList()
     }
@@ -901,77 +952,566 @@ fun SpecificView(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .padding(bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(bottom = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Spacer(Modifier.height(8.dp))
-            items.forEach { (labels, resetValue) ->
+            items.forEachIndexed { index, (labels, resetValue) ->
                 val (label, displayValue) = labels
+                val weight = if (index == 0) 2f else 1f
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f) // chaque rectangle occupe une part égale de la hauteur restante
+                        .weight(weight) // chaque rectangle occupe une part égale de la hauteur restante sauf le 1er
                         .background(Color.DarkGray.copy(alpha = 0.3f))
                         //.border(1.dp, Color.Gray)
-                        .padding(8.dp),
+                        .padding(5.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
-                ) {
+                )
+                {
+                    Column (
+                        modifier = Modifier.width(25.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (resetBoutons[index] > 1)
+                            Button(
+                                onClick = {
+                                    com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = resetValue + "Renewed"
+                                },
+                                modifier = Modifier.size(20.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC0CA33))
+                            ) { Text("T")
+                            }
+                    }
+
                     BoxWithConstraints(
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
                     ) {
                         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
 
                         // Taille max bornée à la fois par la hauteur du bloc et par la largeur du texte
-                        val maxLabelFont = with(LocalDensity.current) { (availableHeightPx * 0.25f).toSp() }
-                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.5f).toSp() }
+                        val maxLabelFont = with(LocalDensity.current) { (availableHeightPx * 0.3f).toSp() }
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
 
                         val labelFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(label),
+                            values = listOf("  $label  "),
                             availableWidthPx = availableWidthPx,
                             maxFontSize = maxLabelFont,
                             minFontSize = 6.sp
                         )
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(displayValue),
+                            values = listOf("  $displayValue  "),
                             availableWidthPx = availableWidthPx,
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
                         )
 
-                        Column {
+                        Column  (
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ){
                             Text(
-                                text = "$label   ",
+                                text = "$label  ",
                                 color = Color.Gray,
                                 fontSize = labelFont,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
                             )
                             Text(
-                                text = "$displayValue   ",
+                                text = "  $displayValue  ",
                                 color = Color.White,
                                 fontSize = valueFont,
                                 maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
-                    Button(
-                        onClick = {
-                            com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = resetValue
-                        },
-                        modifier = Modifier.size(20.dp),
-                        contentPadding = PaddingValues(0.dp),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+
+                    Column (
+                        modifier = Modifier.width(25.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        if (resetBoutons[index] > 0)
+                            Button(
+                                onClick = {
+                                    com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = resetValue
+                                },
+                                modifier = Modifier.size(20.dp),
+                                contentPadding = PaddingValues(0.dp),
+                                shape = CircleShape,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                            ) { Text("0")
+                            }
                     }
+
+
                 }
             }
         }
     }
+
+@Composable
+fun VerticalSpeedView(
+    cardName: String,
+    screenValues: ScreenValues,
+    currentTime: Long,
+    numberOfValues: Int,
+    resetBoutons: List<Int>
+
+) {
+    val textMeasurer = rememberTextMeasurer()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .padding(bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.5f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        )
+        {
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                // Taille max bornée à la fois par la hauteur du bloc et par la largeur du texte
+                val maxLabelFont =
+                    with(LocalDensity.current) { (availableHeightPx * 0.3f).toSp() }
+                val maxValueFont =
+                    with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
+
+                val labelFont = computeFontSize(
+                    textMeasurer = textMeasurer,
+                    values = listOf("  vitesse verticale  "),
+                    availableWidthPx = availableWidthPx,
+                    maxFontSize = maxLabelFont,
+                    minFontSize = 6.sp
+                ) * 1.2f
+                val valueFont = computeFontSize(
+                    textMeasurer = textMeasurer,
+                    values = listOf("  %.2f m/s  ".format(screenValues.verticalSpeed)),
+                    availableWidthPx = availableWidthPx,
+                    maxFontSize = maxValueFont,
+                    minFontSize = 8.sp
+                ) * 0.85f
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "vitesse verticale",
+                        color = Color.Gray,
+                        fontSize = labelFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "  %.2f m/s  ".format(screenValues.verticalSpeed),
+                        color = Color.Gray,
+                        fontSize = valueFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.5f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        )
+        {
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                // Taille max bornée à la fois par la hauteur du bloc et par la largeur du texte
+                val maxValueFont =
+                    with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
+
+                val valueFont = computeFontSize(
+                    textMeasurer = textMeasurer,
+                    values = listOf("  %.2f m/s  ".format(screenValues.verticalSpeed4)),
+                    availableWidthPx = availableWidthPx,
+                    maxFontSize = maxValueFont,
+                    minFontSize = 8.sp
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "  %.2f m/s  ".format(screenValues.verticalSpeed4),
+                        color = Color.White,
+                        fontSize = valueFont,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.width(25.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = {
+                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "minVerticalSpeed"
+                    },
+                    modifier = Modifier.size(20.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) { Text("0")
+                }
+            }
+            Column(
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                //vitesse min
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                    val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                    val maxValueFont =
+                        with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
+
+                    val valueFont = computeFontSize(
+                        textMeasurer = textMeasurer,
+                        values = listOf(
+                            "%.2f   ".format(screenValues.minVerticalSpeed) + "x: %.2f ".format(
+                                screenValues.maxVerticalSpeed
+                            )
+                        ),
+                        availableWidthPx = availableWidthPx,
+                        maxFontSize = maxValueFont,
+                        minFontSize = 8.sp
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "  %.2f ".format(screenValues.minVerticalSpeed),
+                            color = Color.White,
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "  %.2f ".format(screenValues.maxVerticalSpeed),
+                            color = Color.White,
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.width(25.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = {
+                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed"
+                    },
+                    modifier = Modifier.size(20.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) { Text("0")
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                    val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                    val maxValueFont =
+                        with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
+
+                    val valueFont = computeFontSize(
+                        textMeasurer = textMeasurer,
+                        values = listOf(
+                            "Résistance: %.2f".format(screenValues.verticalSpeed15) + "          / %.2f ".format(
+                                screenValues.maxVerticalSpeed15
+                            )
+                        ),
+                        availableWidthPx = max(0.5f, availableWidthPx - 100),
+                        maxFontSize = maxValueFont,
+                        minFontSize = 8.sp
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Résistance:    %.2f".format(screenValues.verticalSpeed15),
+                            color = Color.White,
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "        / %.2f     ".format(screenValues.maxVerticalSpeed15),
+                            color = Color(0xFFFFCF00),
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Left
+                        )
+                    }
+                }
+            }
+                Column(
+                    modifier = Modifier.width(25.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Button(
+                        onClick = {
+                            com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed15"
+                        },
+                        modifier = Modifier.size(20.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        shape = CircleShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                    ) { Text("0")
+                    }
+                }
+            }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                    val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                    val maxValueFont =
+                        with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
+
+                    val valueFont = computeFontSize(
+                        textMeasurer = textMeasurer,
+                        values = listOf(
+                            "Résistance: %.2f".format(screenValues.verticalSpeed15) + "          / %.2f ".format(
+                                screenValues.maxVerticalSpeed15
+                            )
+                        ),
+                        availableWidthPx = max(0.5f, availableWidthPx - 100),
+                        maxFontSize = maxValueFont,
+                        minFontSize = 8.sp
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Seuil:               %.2f ".format(screenValues.verticalSpeed125),
+                            color = Color.White,
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "       / %.2f ".format(screenValues.maxVerticalSpeed125),
+                            color = Color(0xFFFFCF00),
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.width(25.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = {
+                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed125"
+                    },
+                    modifier = Modifier.size(20.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) { Text("0")
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .background(Color.DarkGray.copy(alpha = 0.3f))
+                //.border(1.dp, Color.Gray)
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                    val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                    val maxValueFont =
+                        with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
+
+                    val valueFont = computeFontSize(
+                        textMeasurer = textMeasurer,
+                        values = listOf(
+                            "Résistance: %.2f".format(screenValues.verticalSpeed15) + "          / %.2f ".format(
+                                screenValues.maxVerticalSpeed15
+                            )
+                        ),
+                        availableWidthPx = max(0.5f, availableWidthPx - 100),
+                        maxFontSize = maxValueFont,
+                        minFontSize = 8.sp
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Endurance:     %.2f ".format(screenValues.verticalSpeed1000),
+                            color = Color.White,
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "       / %.2f  ".format(screenValues.maxVerticalSpeed1000),
+                            color = Color(0xFFFFBF00),
+                            fontSize = valueFont,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+            Column(
+                modifier = Modifier.width(25.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(
+                    onClick = {
+                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed1000"
+                    },
+                    modifier = Modifier.size(20.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) { Text("0")
+                }
+            }
+        }
+
+    }
+        }
+
+
+
+
 
 //*/

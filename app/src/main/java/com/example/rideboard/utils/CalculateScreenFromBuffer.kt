@@ -87,16 +87,22 @@ fun calculateScreenValues(buffer: GpsBuffer,
         displayedAltitude = point.gpsPointDisplayedAltitude,
         displayedVerticalSpeed = point.gpsPointDisplayedVerticalSpeed,
         durationHighSpreadAltitude = point.gpsPointDurationHighSpreadAltitude,
-
+        verticalSpeed4 = point.screenVerticalSpeed4,
+        verticalSpeed15 = point.screenVerticalSpeed15,
+        verticalSpeed125 = point.screenVerticalSpeed125,
+        verticalSpeed1000 = point.screenVerticalSpeed1000,
+        maxVerticalSpeed15 = point.maxVerticalSpeed15,
+        maxVerticalSpeed125 = point.maxVerticalSpeed125,
+        maxVerticalSpeed1000 = point.maxVerticalSpeed1000,
 
         maxSpeed = point.gpsPointMaxSpeed,
-        averageSpeed = if (point.gpsPointDurationTime > 2000L) {
-            1000.0*point.gpsPointTotalDistance/(point.gpsPointDurationTime).toDouble()
+        averageSpeed = if (point.partialDurationTimeForAverageSpeed > 2000L) {
+            1000.0*point.partialDistanceForAverageSpeed/(point.partialDurationTimeForAverageSpeed).toDouble()
             }
             else 0.0,
-        durationSeconds = (point.gpsPointDurationTime + 300)/1000,
-        distance = point.gpsPointTotalDistance,
-        elevationGain = point.gpsPointElevationGain,
+        durationSeconds = (point.partialDurationTime + 300)/1000,
+        distance = point.partialDistance,
+        elevationGain = point.partialElevationGain,
         slope = point.gpsPointSlope,
         minSlope = point.gpsPointMinSlope,
         maxSlope = point.gpsPointMaxSlope,

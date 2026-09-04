@@ -51,6 +51,12 @@ data class ScreenValues(
     val durationSeconds: Long = 0L,
     val altMns: Double = 0.0,
     val altMnt: Double = 0.0,
-    val altGps: Double = 0.0
-
+    val altGps: Double = 0.0,
+    val verticalSpeed4: Double = 0.0,
+    val verticalSpeed15: Double = 0.0,
+    val verticalSpeed125: Double = 0.0,
+    val verticalSpeed1000: Double = 0.0,
+    val maxVerticalSpeed15: Double = 0.0,
+    val maxVerticalSpeed125: Double = 0.0,
+    val maxVerticalSpeed1000: Double = 0.0
 )
