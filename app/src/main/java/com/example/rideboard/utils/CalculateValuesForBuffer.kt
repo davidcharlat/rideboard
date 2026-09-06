@@ -1040,8 +1040,16 @@ fun calculateAltitudeProbability (newHorizontalDistanceDone: Double,
 
     //cette zone pour ajouter une fonction qui inhibe les gros eccarts d'alt
     val expectedAltitudeDependingOnVerticalSpeed = previousAltitude + previousVerticalSpeed * deltaTimeInSecond
-    val expectedMaxAltitudeDependingOnVerticalSpeed = previousAltitude + max (0.0,previousVerticalSpeed + 0.15)*deltaTimeInSecond
-    val expectedMinAltitudeDependingOnVerticalSpeed = previousAltitude + min (0.0, previousVerticalSpeed - 0.33)*deltaTimeInSecond
+    val expectedMaxAltitudeDependingOnVerticalSpeed = if ((previousSpeed*previousSpeed) < ((newHorizontalDistanceDone / deltaTimeInSecond).pow(2) + 3.0))
+        previousAltitude + max (0.0,previousVerticalSpeed + 0.15)*deltaTimeInSecond
+        else if ((previousSpeed*previousSpeed) < ((newHorizontalDistanceDone / deltaTimeInSecond).pow(2) + 5.0))
+            previousAltitude + max (0.0,previousVerticalSpeed + 0.25)*deltaTimeInSecond
+        else previousAltitude + max (0.0,previousVerticalSpeed + 0.35)*deltaTimeInSecond
+    val expectedMinAltitudeDependingOnVerticalSpeed = if (previousSpeed*previousSpeed < ((newHorizontalDistanceDone / deltaTimeInSecond).pow(2) - 6.5))
+        previousAltitude + min (0.0, previousVerticalSpeed - 0.33)*deltaTimeInSecond
+        else if (previousSpeed*previousSpeed < ((newHorizontalDistanceDone / deltaTimeInSecond).pow(2) - 10))
+            previousAltitude + min (0.0, previousVerticalSpeed - 0.50)*deltaTimeInSecond
+        else previousAltitude + min (0.0, previousVerticalSpeed - 0.66)*deltaTimeInSecond
     val functionOfProbabilityDependingOnVerticalSpeed = {x: Double ->
         try {
             if (x > expectedAltitudeDependingOnVerticalSpeed) {

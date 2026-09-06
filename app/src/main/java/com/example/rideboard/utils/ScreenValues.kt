@@ -58,5 +58,6 @@ data class ScreenValues(
     val verticalSpeed1000: Double = 0.0,
     val maxVerticalSpeed15: Double = 0.0,
     val maxVerticalSpeed125: Double = 0.0,
-    val maxVerticalSpeed1000: Double = 0.0
+    val maxVerticalSpeed1000: Double = 0.0,
+    val hearthRate: Double? = null
 )

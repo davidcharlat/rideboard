@@ -307,6 +307,22 @@ fun RideContent(
                 )
             }
         }
+        //-------------------------------------------------------
+        // ligne pour les capteurs
+        //-------------------------------------------------------
+
+        Box(
+            modifier = Modifier
+                .weight(0.1f)
+                .fillMaxWidth()
+                .padding(1.dp)
+                .border(1.dp, Color.Yellow)
+
+        ) {
+            sensorView(screenValues)
+        }
+
+
 
         //-------------------------------------------------------
         // 8 rectangles
@@ -893,6 +909,71 @@ fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeter
     )
 
     return GeoPoint(Math.toDegrees(lat2), Math.toDegrees(lon2))
+}
+
+@Composable
+fun sensorView(screenValues: ScreenValues) {
+    val textMeasurer = rememberTextMeasurer()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.DarkGray.copy(alpha = 0.3f))
+            //.border(1.dp, Color.Gray)
+            .padding(5.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    )
+    {
+        BoxWithConstraints(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            val stringToPrint = (if (screenValues.hearthRate != null) ("  "+"\u2665" + " %.0f bpm  ".format(screenValues.hearthRate))
+            else ("  " + "\u2665" + "   "))
+
+            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+            // Taille max bornée à la fois par la hauteur du bloc et par la largeur du texte
+            val maxValueFont =
+                with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
+
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(stringToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Button(
+                    onClick = { },
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.CenterStart),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF100000))
+                ) {
+                    Text("+")
+                }
+
+                Text(
+                    text = stringToPrint,
+                    color = Color.White,
+                    fontSize = valueFont,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
+    }
 }
 
 @Composable
