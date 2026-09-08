@@ -108,6 +108,7 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxSlope = point.gpsPointMaxSlope,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
+        heartRate = point.heartRate?.toDouble()
     )
 
 

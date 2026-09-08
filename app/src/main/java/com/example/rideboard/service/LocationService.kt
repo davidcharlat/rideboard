@@ -69,6 +69,7 @@ class LocationService : Service() {
                         altitudeIgn = null,
                         altitudeLidarHdMnt = null,
                         altitudeLidarHdMns = null,
+                        heartRate = AppConfig.heartRateManager?.currentHeartRate,
                         gpsPointSpeed = 0.0,
                         gpsPointAcceleration = 0.0,
                         gpsPointVerticalSpeed   = 0.0,

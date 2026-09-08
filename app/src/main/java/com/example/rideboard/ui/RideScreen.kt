@@ -1,10 +1,14 @@
 package com.example.rideboard.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.view.MotionEvent
 import android.view.View
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -86,6 +90,23 @@ fun RideScreen(
     val screenValues by rideViewModel.screenValues
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    val bluetoothPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        arrayOf(
+            Manifest.permission.BLUETOOTH_SCAN,
+            Manifest.permission.BLUETOOTH_CONNECT
+        )
+    } else {
+        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        if (perms.values.all { it }) {
+            AppConfig.heartRateManager?.startScan()
+        }
+    }
 
     var isntOver by remember { mutableStateOf(true) }
     var isRecording by remember { mutableStateOf(AppConfig.isRecording) }
@@ -204,7 +225,10 @@ fun RideScreen(
         RideContent(
             modifier = Modifier.padding(padding),
             screenValues = screenValues,
-            isToggleBlocked = isToggleBlocked
+            isToggleBlocked = isToggleBlocked,
+            onConnectSensor = {
+                permissionLauncher.launch(bluetoothPermissions)
+            }
         )
     }
 }
@@ -213,7 +237,8 @@ fun RideScreen(
 fun RideContent(
     modifier: Modifier,
     screenValues: ScreenValues,
-    isToggleBlocked: Boolean
+    isToggleBlocked: Boolean,
+    onConnectSensor: () -> Unit
 ) {
     var currentTime by remember {
         mutableLongStateOf(System.currentTimeMillis())
@@ -319,7 +344,7 @@ fun RideContent(
                 .border(1.dp, Color.Yellow)
 
         ) {
-            sensorView(screenValues)
+            SensorView(screenValues, onConnectSensor)
         }
 
 
@@ -912,7 +937,7 @@ fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeter
 }
 
 @Composable
-fun sensorView(screenValues: ScreenValues) {
+fun SensorView(screenValues: ScreenValues, onConnectClick: () -> Unit) {
     val textMeasurer = rememberTextMeasurer()
     Row(
         modifier = Modifier
@@ -928,7 +953,7 @@ fun sensorView(screenValues: ScreenValues) {
             modifier = Modifier.weight(1f),
             contentAlignment = Alignment.Center
         ) {
-            val stringToPrint = (if (screenValues.hearthRate != null) ("  "+"\u2665" + " %.0f bpm  ".format(screenValues.hearthRate))
+            val stringToPrint = (if (screenValues.heartRate != null) ("  "+"\u2665" + " %d bpm  ".format(screenValues.heartRate.toInt()))
             else ("  " + "\u2665" + "   "))
 
             val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
@@ -951,7 +976,7 @@ fun sensorView(screenValues: ScreenValues) {
                 contentAlignment = Alignment.Center
             ) {
                 Button(
-                    onClick = { },
+                    onClick = onConnectClick,
                     modifier = Modifier
                         .size(20.dp)
                         .align(Alignment.CenterStart),

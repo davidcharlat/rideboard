@@ -68,6 +68,7 @@ data class GpsSample(
     var maxVerticalSpeed15: Double = 0.0,
     var maxVerticalSpeed125: Double = 0.0,
     var maxVerticalSpeed1000: Double = 0.0,
+    var heartRate: Int? = null,
 
     var gpsPointScreenValueDouble1: Double? = 0.0,
     var gpsPointScreenValueDouble2: Double? = 0.0,

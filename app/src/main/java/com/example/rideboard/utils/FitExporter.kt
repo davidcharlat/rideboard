@@ -85,12 +85,12 @@ object FitExporter {
                         val timestampLong = tokens[0].toLong()
                         val latitude = tokens[1].toDouble()
                         val longitude = tokens[2].toDouble()
-                        val altitude = tokens[3].toFloat()
+                        val altitude = tokens[3].toFloatOrNull()
                         val presentElevationGain = tokens[4].toFloat()
                         val presentElapsedTime = tokens[5].toFloat()
                         val presentSpeed = tokens[6].toFloat()
                         val presentTotalDistance = tokens[7].toFloat()
-                        val presentVerticalSpeed = tokens[8].toFloat()
+                        val presentHeartRate = tokens[8].toShortOrNull()
 
                         // Ajustement automatique MS vs Secondes
                         // Si le timestamp est plus petit que 1000000000000, il est probablement déjà en secondes.
@@ -113,7 +113,7 @@ object FitExporter {
                             positionLong = (longitude * (2147483648.0 / 180.0)).toInt()
                             enhancedAltitude = altitude
                             enhancedSpeed = presentSpeed
-                            verticalSpeed = presentVerticalSpeed
+                            heartRate = presentHeartRate
                             distance = totalDist
                         }
                         encode.write(recordMesg)

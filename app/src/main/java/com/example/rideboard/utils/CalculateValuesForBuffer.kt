@@ -855,7 +855,8 @@ fun calculateValuesForBuffer(
             (newGpsPoint.gpsPointDurationTime).toDouble()/1000.0,
             newGpsPoint.gpsPointDisplayedSpeed,
             newGpsPoint.gpsPointTotalDistance,
-            newGpsPoint.gpsPointDisplayedVerticalSpeed2,) as List<Double?>
+            if (newGpsPoint.heartRate != null) (newGpsPoint.heartRate!!.toDouble()) else null,
+            ) as List<Double?>
     )
     //cr    eation du fichier gps_debug.txt
 

@@ -22,6 +22,7 @@ object AppConfig {
     lateinit var repository: AltitudeRepository
     lateinit var providers: Map<String, AltitudeProvider>
     var altitudeManager: AltitudeManager? = null
+    var heartRateManager: com.example.rideboard.utils.HeartRateManager? = null
     val httpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .connectTimeout(3, TimeUnit.SECONDS)
