@@ -36,6 +36,8 @@ object FitExporter {
     }
 
     fun export(context: Context, rideFile: File) {
+        (File(context.filesDir, "ride.fit")).delete()
+
         val outputDir = context.getExternalFilesDir(null)  //context.filesDir
         val fitOutputFile = File(outputDir, "ride.fit")
         val encode = FileEncoder(fitOutputFile, Fit.ProtocolVersion.V2_0)
@@ -90,7 +92,9 @@ object FitExporter {
                         val presentElapsedTime = tokens[5].toFloat()
                         val presentSpeed = tokens[6].toFloat()
                         val presentTotalDistance = tokens[7].toFloat()
-                        val presentHeartRate = tokens[8].toShortOrNull()
+                        val presentHeartRate = tokens[8].toFloatOrNull()?.toInt()?.toShort()
+                        val presentPower = tokens[9].toFloatOrNull()?.toInt()
+                        val presentCadence = tokens[10].toFloatOrNull()?.toInt()?.toShort()
 
                         // Ajustement automatique MS vs Secondes
                         // Si le timestamp est plus petit que 1000000000000, il est probablement déjà en secondes.
@@ -115,6 +119,8 @@ object FitExporter {
                             enhancedSpeed = presentSpeed
                             heartRate = presentHeartRate
                             distance = totalDist
+                            power = presentPower
+                            cadence = presentCadence
                         }
                         encode.write(recordMesg)
 

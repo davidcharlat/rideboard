@@ -20,7 +20,7 @@ import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.config.AppConfig
 import com.example.rideboard.service.LocationService
 import com.example.rideboard.ui.RideScreen
-import com.example.rideboard.utils.HeartRateManager
+import com.example.rideboard.utils.CyclingSensorManager
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -58,7 +58,7 @@ class MainActivity : ComponentActivity() {
         AppConfig.repository = repository
         AppConfig.providers = providers
         AppConfig.altitudeManager = altitudeManager
-        AppConfig.heartRateManager = HeartRateManager(applicationContext)
+        AppConfig.sensorManager = CyclingSensorManager(applicationContext)
 
         // --- Démarrage du service de localisation
         val serviceIntent = Intent(this, LocationService::class.java)

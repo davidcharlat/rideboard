@@ -59,5 +59,16 @@ data class ScreenValues(
     val maxVerticalSpeed15: Double = 0.0,
     val maxVerticalSpeed125: Double = 0.0,
     val maxVerticalSpeed1000: Double = 0.0,
-    val heartRate: Double? = null
+    val heartRate: Double? = null,
+    val power: Int? = null,
+    val cadence: Int? = null,
+    val powerPercentRightLeft: Int? = null,
+    val powerTorque: Double? = null,
+    val minHR: Int? = null,
+    val maxHR: Int? = null,
+    val durationHRZ2: Int = 0,
+    val durationHRZ3: Int = 0,
+    val durationHRZ4: Int = 0,
+    val durationHRZ5: Int = 0,
+    val avgHR: Double = 0.0,
 )

@@ -20,6 +20,12 @@ import kotlin.math.pow
 
 const val MIN_SPEED = 0.1
 const val STEP_FOR_ELEVATION_GAIN = 0.1
+const val HRZ2 = 112
+const val HRZ3 = 138
+const val HRZ4 = 155
+const val HRZ5 = 163
+
+
 
 data class Coordinates(
     var x: Double,
@@ -118,6 +124,16 @@ fun calculateValuesForBuffer(
     val previousMaxVerticalSpeed15 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed15" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed15") 0.0 else previousGpsPoint.maxVerticalSpeed15
     val previousMaxVerticalSpeed125 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed125" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed125") 0.0 else previousGpsPoint.maxVerticalSpeed125
     val previousMaxVerticalSpeed1000 = if (latestGpsPoint.gpsPointStringToReset == "maxVerticalSpeed1000" || newGpsPoint.gpsPointStringToReset == "maxVerticalSpeed1000") 0.0 else previousGpsPoint.maxVerticalSpeed1000
+    val previousDurationHRZ2 = if (latestGpsPoint.gpsPointStringToReset == "DurationHRZ2" || newGpsPoint.gpsPointStringToReset == "DurationHRZ2") 0 else previousGpsPoint.durationHRZ2
+    val previousDurationHRZ3 = if (latestGpsPoint.gpsPointStringToReset == "DurationHRZ3" || newGpsPoint.gpsPointStringToReset == "DurationHRZ3") 0 else previousGpsPoint.durationHRZ3
+    val previousDurationHRZ4 = if (latestGpsPoint.gpsPointStringToReset == "DurationHRZ4" || newGpsPoint.gpsPointStringToReset == "DurationHRZ4") 0 else previousGpsPoint.durationHRZ4
+    val previousDurationHRZ5 = if (latestGpsPoint.gpsPointStringToReset == "DurationHRZ5" || newGpsPoint.gpsPointStringToReset == "DurationHRZ5") 0 else previousGpsPoint.durationHRZ5
+    val previousDurationHR = if (latestGpsPoint.gpsPointStringToReset == "AvgHR" || newGpsPoint.gpsPointStringToReset == "AvgHR") 0 else previousGpsPoint.durationHR
+    val previousMinHR = if (latestGpsPoint.gpsPointStringToReset == "MinHR" || newGpsPoint.gpsPointStringToReset == "MinHR") null else previousGpsPoint.minHR
+    val previousMaxHR = if (latestGpsPoint.gpsPointStringToReset == "MaxHR" || newGpsPoint.gpsPointStringToReset == "MaxHR") null else previousGpsPoint.maxHR
+    val previousTotHRForAvg = if (latestGpsPoint.gpsPointStringToReset == "AvgHR" || newGpsPoint.gpsPointStringToReset == "AvgHR") 0 else previousGpsPoint.totHRForAvg
+
+
 
     if (buffer.size == 3 || (previousGpsPointDurationTime < 100 && previousGpsPointTotalDistance == 0.0)) {
         val rideFile = File(context.filesDir, "ride.tsv")
@@ -148,6 +164,7 @@ fun calculateValuesForBuffer(
 
     val deltaTimeInSecond = /*if (previousIsMoving) */ (newGpsPoint.timestamp - previousTime).toDouble() / 1000.0
                             //else (newGpsPoint.timestamp - previousTime).toDouble() / 500.0 + 4.0
+    val durationTimeIntInSec = min(4,(deltaTimeInSecond + 0.5).toLong())
     val newCumulatedGpsPrecision = calculateNewCumulatedGpsPrecision (newGpsPoint, previousCumulatedGpsPrecision)
 
     if (!newIsStarted && newCumulatedGpsPrecision >1) {
@@ -282,7 +299,14 @@ fun calculateValuesForBuffer(
         sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
         sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
         sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
-
+        sample.durationHRZ2 = previousDurationHRZ2
+        sample.durationHRZ3 = previousDurationHRZ3
+        sample.durationHRZ4 = previousDurationHRZ4
+        sample.durationHRZ5 = previousDurationHRZ5
+        sample.durationHR = previousDurationHR
+        sample.minHR = previousMinHR
+        sample.maxHR = previousMaxHR
+        sample.totHRForAvg = previousTotHRForAvg
         return
     }
 
@@ -474,6 +498,16 @@ fun calculateValuesForBuffer(
         sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
         sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
         sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
+        sample.durationHRZ2 = if ((newGpsPoint.heartRate?:0) in HRZ2..<HRZ3) previousDurationHRZ2 + durationTimeIntInSec else previousDurationHRZ2
+        sample.durationHRZ3 = if ((newGpsPoint.heartRate?:0) in HRZ3..<HRZ4) previousDurationHRZ3 + durationTimeIntInSec else previousDurationHRZ3
+        sample.durationHRZ4 = if ((newGpsPoint.heartRate?:0) in HRZ4..<HRZ5) previousDurationHRZ4 + durationTimeIntInSec else previousDurationHRZ4
+        sample.durationHRZ5 = if ((newGpsPoint.heartRate?:0) >= HRZ5) previousDurationHRZ5 + durationTimeIntInSec else previousDurationHRZ5
+        sample.durationHR = if ((newGpsPoint.heartRate?:0) > 0) previousDurationHR + durationTimeIntInSec else previousDurationHR
+        sample.minHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMinHR != null) min(newGpsPoint.heartRate!!, previousMinHR) else if(previousMinHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMinHR
+        sample.maxHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMaxHR != null) max(newGpsPoint.heartRate!!, previousMaxHR) else if(previousMaxHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMaxHR
+        sample.totHRForAvg = if ((newGpsPoint.heartRate?:0) > 0) previousTotHRForAvg + newGpsPoint.heartRate!!*durationTimeIntInSec else previousTotHRForAvg
+
+
 
         //sample.gpsPointScreenValueDouble1: Double? = 0.0,
         //sample.gpsPointScreenValueDouble2: Double? = 0.0,
@@ -543,6 +577,14 @@ fun calculateValuesForBuffer(
         sample.maxVerticalSpeed15 = previousMaxVerticalSpeed15
         sample.maxVerticalSpeed125 = previousMaxVerticalSpeed125
         sample.maxVerticalSpeed1000 = previousMaxVerticalSpeed1000
+        sample.durationHRZ2 = if ((newGpsPoint.heartRate?:0) in HRZ2..<HRZ3) previousDurationHRZ2 + durationTimeIntInSec else previousDurationHRZ2
+        sample.durationHRZ3 = if ((newGpsPoint.heartRate?:0) in HRZ3..<HRZ4) previousDurationHRZ3 + durationTimeIntInSec else previousDurationHRZ3
+        sample.durationHRZ4 = if ((newGpsPoint.heartRate?:0) in HRZ4..<HRZ5) previousDurationHRZ4 + durationTimeIntInSec else previousDurationHRZ4
+        sample.durationHRZ5 = if ((newGpsPoint.heartRate?:0) >= HRZ5) previousDurationHRZ5 + durationTimeIntInSec else previousDurationHRZ5
+        sample.durationHR = if ((newGpsPoint.heartRate?:0) > 0) previousDurationHR + durationTimeIntInSec else previousDurationHR
+        sample.minHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMinHR != null) min(newGpsPoint.heartRate!!, previousMinHR) else if(previousMinHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMinHR
+        sample.maxHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMaxHR != null) max(newGpsPoint.heartRate!!, previousMaxHR) else if(previousMaxHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMaxHR
+        sample.totHRForAvg = if ((newGpsPoint.heartRate?:0) > 0) previousTotHRForAvg + newGpsPoint.heartRate!!*durationTimeIntInSec else previousTotHRForAvg
 
         //sample.gpsPointScreenValueDouble1: Double? = 0.0,
         //sample.gpsPointScreenValueDouble2: Double? = 0.0,
@@ -561,7 +603,7 @@ fun calculateValuesForBuffer(
     val newIsMoving = true
     val newDirection = calculateNewDirection (previousLatitude, previousLongitude, latestGpsPoint, newGpsPoint, previousGpsPoint, previousDirection)
     val speedCorrectionRatio = calculateSpeedCorrectionRatio(
-        calculateAngleBetweenTwoDirection(previousDirection, newDirection))
+        calculateAngleBetweenTwoDirection(previousDirection, newDirection))*1.004 // corection empirique minimale (= tendance de l'algorythme à couper les virages?)
 
     val deltaAltitudeBetweenPreviousAndNewGpsPoint = try {
         val delta = if (previousAltitude == null || (previousAltitudeSourceMntMnsOrGps == "GPS" && altitudeGpsNewGpsPt == null)
@@ -813,17 +855,27 @@ fun calculateValuesForBuffer(
     sample.gpsPointMaxVerticalSpeed = max(sample.screenVerticalSpeed4, previousMaxVerticalSpeed)
     sample.gpsPointMinVerticalSpeed = min(sample.screenVerticalSpeed4, previousMinVerticalSpeed)
     sample.screenVerticalSpeed15 = run { val kept = (14.0/15.0).pow(deltaTimeInSecond)
-        previousVerticalSpeed15 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+        previousVerticalSpeed15 * kept + max(previousVerticalSpeed15 / 2.0 , averagedVerticalSpeed2) * (1.0 - kept)
     }
     sample.screenVerticalSpeed125 = run { val kept = (124.0/125.0).pow(deltaTimeInSecond)
-        previousVerticalSpeed125 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+        previousVerticalSpeed125 * kept + max(previousVerticalSpeed125 / 2.0 , averagedVerticalSpeed2) * (1.0 - kept)
     }
     sample.screenVerticalSpeed1000 = run { val kept = (999.0/1000.0).pow(deltaTimeInSecond)
-        previousVerticalSpeed1000 * kept + max(0.0 , averagedVerticalSpeed2) * (1.0 - kept)
+        previousVerticalSpeed1000 * kept + max(previousVerticalSpeed1000 / 2.0 , averagedVerticalSpeed2) * (1.0 - kept)
     }
     sample.maxVerticalSpeed15 = max(previousMaxVerticalSpeed15, sample.screenVerticalSpeed15)
     sample.maxVerticalSpeed125 = max(previousMaxVerticalSpeed125, sample.screenVerticalSpeed125)
     sample.maxVerticalSpeed1000 = max(previousMaxVerticalSpeed1000, sample.screenVerticalSpeed1000)
+    sample.durationHRZ2 = if ((newGpsPoint.heartRate?:0) in HRZ2..<HRZ3) previousDurationHRZ2 + durationTimeIntInSec else previousDurationHRZ2
+    sample.durationHRZ3 = if ((newGpsPoint.heartRate?:0) in HRZ3..<HRZ4) previousDurationHRZ3 + durationTimeIntInSec else previousDurationHRZ3
+    sample.durationHRZ4 = if ((newGpsPoint.heartRate?:0) in HRZ4..<HRZ5) previousDurationHRZ4 + durationTimeIntInSec else previousDurationHRZ4
+    sample.durationHRZ5 = if ((newGpsPoint.heartRate?:0) >= HRZ5) previousDurationHRZ5 + durationTimeIntInSec else previousDurationHRZ5
+    sample.durationHR = if ((newGpsPoint.heartRate?:0) > 0) previousDurationHR + durationTimeIntInSec else previousDurationHR
+    sample.minHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMinHR != null) min(newGpsPoint.heartRate!!, previousMinHR) else if(previousMinHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMinHR
+    sample.maxHR = if ((newGpsPoint.heartRate?:0) > 0 && previousMaxHR != null) max(newGpsPoint.heartRate!!, previousMaxHR) else if(previousMaxHR == null && newGpsPoint.heartRate != null) newGpsPoint.heartRate else previousMaxHR
+    sample.totHRForAvg = if ((newGpsPoint.heartRate?:0) > 0) previousTotHRForAvg + newGpsPoint.heartRate!!*durationTimeIntInSec else previousTotHRForAvg
+
+
 
     sample.gpsPointScreenValueDouble1=latestGpsPoint.altitudeGps
     sample.gpsPointScreenValueDouble2 = expectedDistance
@@ -856,7 +908,8 @@ fun calculateValuesForBuffer(
             newGpsPoint.gpsPointDisplayedSpeed,
             newGpsPoint.gpsPointTotalDistance,
             if (newGpsPoint.heartRate != null) (newGpsPoint.heartRate!!.toDouble()) else null,
-            ) as List<Double?>
+            if (newGpsPoint.power != null) (newGpsPoint.power!!.toDouble()) else null,
+            if (newGpsPoint.cadence != null) (newGpsPoint.cadence!!.toDouble()) else null) as List<Double?>
     )
     //cr    eation du fichier gps_debug.txt
 

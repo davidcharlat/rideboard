@@ -2,6 +2,7 @@ package com.example.rideboard.utils
 
 import android.annotation.SuppressLint
 import android.content.Context
+import androidx.compose.runtime.snapshots.toInt
 import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
@@ -94,7 +95,6 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxVerticalSpeed15 = point.maxVerticalSpeed15,
         maxVerticalSpeed125 = point.maxVerticalSpeed125,
         maxVerticalSpeed1000 = point.maxVerticalSpeed1000,
-
         maxSpeed = point.gpsPointMaxSpeed,
         averageSpeed = if (point.partialDurationTimeForAverageSpeed > 2000L) {
             1000.0*point.partialDistanceForAverageSpeed/(point.partialDurationTimeForAverageSpeed).toDouble()
@@ -108,7 +108,19 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxSlope = point.gpsPointMaxSlope,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
-        heartRate = point.heartRate?.toDouble()
+        heartRate = point.heartRate?.toDouble(),
+        power = point.power,
+        cadence = point.cadence,
+        powerPercentRightLeft = point.powerPercentRightLeft,
+        powerTorque = point.powerTorque,
+        minHR = point.minHR,
+        maxHR = point.maxHR,
+        durationHRZ2 = point.durationHRZ2.toInt(),
+        durationHRZ5 = point.durationHRZ5.toInt(),
+        durationHRZ4 = point.durationHRZ4.toInt(),
+        durationHRZ3 = point.durationHRZ3.toInt(),
+        avgHR = if(point.durationHR != 0L) point.totHRForAvg/point.durationHR.toDouble() else 0.0,
+
     )
 
 
