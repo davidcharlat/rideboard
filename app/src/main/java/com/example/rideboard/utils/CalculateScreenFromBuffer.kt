@@ -19,6 +19,7 @@ import kotlin.math.sqrt
 fun calculateScreenValues(buffer: GpsBuffer,
 ): ScreenValues {
     val point = buffer.getNthBeforeLast(2) ?: return ScreenValues()
+    val lastPoint = buffer.getNthBeforeLast(1) ?: return ScreenValues()
     return ScreenValues(
         screenValueDouble1 = point.gpsPointScreenValueDouble1,
         screenValueDouble2 = point.gpsPointScreenValueDouble2,
@@ -96,6 +97,19 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxVerticalSpeed125 = point.maxVerticalSpeed125,
         maxVerticalSpeed1000 = point.maxVerticalSpeed1000,
         maxSpeed = point.gpsPointMaxSpeed,
+        screenPower4 = point.screenPower4,
+        screenPower15 = point.screenPower15,
+        screenPower125 = point.screenPower125,
+        screenPower1000 = point.screenPower1000,
+        maxScreenPower4 = point.maxScreenPower4,
+        maxScreenPower15 = point.maxScreenPower15,
+        maxScreenPower125 = point.maxScreenPower125,
+        maxScreenPower1000 = point.maxScreenPower1000,
+        durationPowerZ2 = point.durationPowerZ2,
+        durationPowerZ5 = point.durationPowerZ5,
+        durationPowerZ4 = point.durationPowerZ4,
+        durationPowerZ3 = point.durationPowerZ3,
+        avgPower = if (point.durationForAveragePower == 0L ) null else point.totalPowerForAveragePower/point.durationForAveragePower.toDouble(),
         averageSpeed = if (point.partialDurationTimeForAverageSpeed > 2000L) {
             1000.0*point.partialDistanceForAverageSpeed/(point.partialDurationTimeForAverageSpeed).toDouble()
             }
@@ -108,9 +122,10 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxSlope = point.gpsPointMaxSlope,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
-        heartRate = point.heartRate?.toDouble(),
-        power = point.power,
-        cadence = point.cadence,
+        heartRate = lastPoint.heartRate?.toDouble(),
+        correctedHeartRate = point.correctedHeartRate,
+        power = lastPoint.power,
+        cadence = lastPoint.cadence,
         powerPercentRightLeft = point.powerPercentRightLeft,
         powerTorque = point.powerTorque,
         minHR = point.minHR,

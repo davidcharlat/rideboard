@@ -83,6 +83,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
 import com.example.rideboard.ui.views.HeartRateView
+import com.example.rideboard.ui.views.PowerView
 import com.example.rideboard.ui.views.VerticalSpeedView
 import com.example.rideboard.utils.SensorType
 
@@ -235,6 +236,7 @@ fun RideScreen(
             modifier = Modifier.padding(padding),
             screenValues = screenValues,
             isToggleBlocked = isToggleBlocked,
+            isRecording = isRecording,
             onConnectSensor = { type ->
                 pendingSensorType = type
                 permissionLauncher.launch(bluetoothPermissions)
@@ -248,6 +250,7 @@ fun RideContent(
     modifier: Modifier,
     screenValues: ScreenValues,
     isToggleBlocked: Boolean,
+    isRecording: Boolean,
     onConnectSensor: (SensorType) -> Unit
 ) {
     var currentTime by remember {
@@ -267,136 +270,149 @@ fun RideContent(
     val primaryFont = (configuration.screenHeightDp/25).sp
     val secondaryFont = (configuration.screenHeightDp/40).sp
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
+        modifier = if (isRecording) {
+            modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        } else {
+            modifier
+                .fillMaxSize()
+                .background(Color.Yellow)
+        }
     ) {
+//-------------------------------------------------------
+// Zone carte ou specificView + barre capteurs (fusionnées)
+//-------------------------------------------------------
 
-        //-------------------------------------------------------
-        // Zone carte ou specificView
-        //-------------------------------------------------------
-
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
-                .weight(1f)
+                .weight(1.12f)
                 .fillMaxWidth()
-                .padding(1.dp)
-                .border(1.dp, Color.DarkGray)
         ) {
+            val sensorBarHeight = maxHeight * (0.12f / 1.12f)
+            val mainZoneHeight = maxHeight * (1f / 1.12f)
+
             if (zoomedCard == null) {
                 MapScreen(
                     latitude = screenValues.latitude ?: 0.0,
                     longitude = screenValues.longitude ?: 0.0,
                     direction = screenValues.direction ?: (3.1416 / 2.0),
                     isToggleBlocked = isToggleBlocked,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(maxHeight) // toute la zone 1.12f, donc déborde sous la barre capteurs
+                        .border(1.dp, Color.DarkGray)
                 )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .height(mainZoneHeight) // seulement la zone "1f", pas de débordement
+                        .padding(1.dp)
+                        .border(1.dp, Color.DarkGray)
+                ) {
+                    when (zoomedCard) {
+                        "Speed" -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 3,
+                                resetBoutons = listOf(0, 2, 1, 0, 0, 0)
+                            )
+                        }
+                        "DurationDistance", "Elevation" -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 2,
+                                resetBoutons = listOf(2, 2, 0, 0, 0, 0)
+                            )
+                        }
+                        "Altitude", "Slope" -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 3,
+                                resetBoutons = listOf(0, 1, 1, 0, 0, 0)
+                            )
+                        }
+                        "VerticalSpeed" -> {
+                            VerticalSpeedView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 7,
+                                resetBoutons = listOf(0, 1, 1, 0, 0, 0, 0, 0, 0)
+                            )
+                        }
+                        "heartRate" -> {
+                            HeartRateView(screenValues = screenValues)
+                        }
+                        "power" -> {
+                            PowerView(screenValues = screenValues)
+                        }
+                        "Direction" -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 3,
+                                resetBoutons = listOf(1, 0, 0, 0, 0, 0)
+                            )
+                        }
+                        "cadence" -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 1,
+                                resetBoutons = listOf(0, 0, 0, 0, 0, 0)
+                            )
+                        }
+                        else -> {
+                            SpecificView(
+                                cardName = zoomedCard!!,
+                                screenValues = screenValues,
+                                currentTime = currentTime,
+                                numberOfValues = 3,
+                                resetBoutons = listOf(0, 0, 0, 0, 0, 0, 0)
+                            )
+                        }
+                    }
+                }
             }
-            else if (zoomedCard == "Speed")
-            {
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 3,
-                    resetBoutons = listOf(0,2,1,0,0,0)
-                )
-            }
-            else if (zoomedCard == "DurationDistance" || zoomedCard == "Elevation")
-            {
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 2,
-                    resetBoutons = listOf(2,2,0,0,0,0)
-                )
-            }
-            else if (zoomedCard == "Altitude" || zoomedCard == "Slope")
-            {
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 3,
-                    resetBoutons = listOf(0,1,1,0,0,0)
-                )
-            }
-            else if (zoomedCard == "VerticalSpeed")
-            {
-                VerticalSpeedView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 7,
-                    resetBoutons = listOf(0,1,1,0,0,0,0,0,0)
-                )
-            }
-            else if (zoomedCard == "heartRate")
-            {
-                HeartRateView(
-                    screenValues = screenValues,
-                )
-            }
-            else if (zoomedCard == "power")
-            {
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 3,
-                    resetBoutons = listOf(1,0,0,0,0,0)
-                )
-            }
-            else if (zoomedCard == "cadence")
-            {
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 1,
-                    resetBoutons = listOf(1,0,0,0,0,0)
-                )
-            }
-            else{
-                SpecificView(
-                    cardName = zoomedCard!!,
-                    screenValues = screenValues,
-                    currentTime = currentTime,
-                    numberOfValues = 3,
-                    resetBoutons = listOf(0,0,0,0,0,0,0)
-                )
-            }
-        }
-        //-------------------------------------------------------
-        // ligne pour les capteurs
-        //-------------------------------------------------------
 
-        Box(
-            modifier = Modifier
-                .weight(0.12f)
-                .fillMaxWidth()
-                .padding(1.dp)
-                .border(1.dp, Color.Yellow)
-
-        ) {
+            // ---- SensorView, désormais À L'INTÉRIEUR du même BoxWithConstraints ----
             SensorView(
-                screenValues = screenValues, 
+                screenValues = screenValues,
                 onConnectClick = onConnectSensor,
-                onSensorClick = { zoomedCard = it }
+                onSensorClick = { zoomedCard = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(2.dp)
+                    .height(sensorBarHeight)
+                    .background(
+                        if (zoomedCard == null) Color.Black.copy(alpha = 0.4f) // transparent sur la carte
+                        else Color.Black // opaque sur une SpecificView
+                    )
             )
         }
-
-
 
         //-------------------------------------------------------
         // 8 rectangles
         //-------------------------------------------------------
 
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(0.65f)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(0.65f)
+                    .background(Color.Black)
         ) {
 
             Row(
@@ -410,6 +426,8 @@ fun RideContent(
                     //title = "Vitesse",
                     primaryValues = listOf("%.1f km/h".format(screenValues.speed * 3.6)),
                     primaryFont = primaryFont,
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Moy %.1f".format((screenValues.averageSpeed?:0.0) * 3.6),
                     "Max %.1f".format(screenValues.maxSpeed * 3.6)),
@@ -421,6 +439,8 @@ fun RideContent(
                    // title = "Date et Heure",
                     primaryValues = listOf(formatTime(currentTime)),
                     primaryFont = primaryFont,
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf(formatDate(currentTime)),
                     onClick = { zoomedCard = "Time" }
@@ -438,6 +458,8 @@ fun RideContent(
                     //title = "Durée / Distance",
                     primaryValues = listOf(formatDuration(screenValues.durationSeconds.toInt())),
                     primaryFont = primaryFont,
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("%.2f km".format(screenValues.distance / 1000.0)),
                     onClick = { zoomedCard = "DurationDistance" }
@@ -448,6 +470,8 @@ fun RideContent(
                     //title = "Altitude",
                     primaryValues = listOf("%.1f m".format(screenValues.altitude)),
                     primaryFont = primaryFont,
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Min %.1f".format(screenValues.minAltitude),
                     "Max %.1f".format(screenValues.maxAltitude)),
@@ -466,6 +490,8 @@ fun RideContent(
                     //title = "Pente",
                     primaryValues = listOf("%.1f ".format(screenValues.slope) + " %  " + screenValues.screenValueString),
                     primaryFont = primaryFont,
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("Min %.1f".format(screenValues.minSlope),
                     "Max %.1f".format(screenValues.maxSlope)),
@@ -474,7 +500,8 @@ fun RideContent(
 
                 MetricCard(
                     modifier = Modifier.weight(1f),
-                    //title = "D+",
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     primaryValues = listOf("%.1f m".format(screenValues.elevationGain)),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
@@ -490,7 +517,8 @@ fun RideContent(
 
                 MetricCard(
                     modifier = Modifier.weight(1f),
-                    //title = "Direction",
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     primaryValues = listOf(screenValues.directionString),
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
@@ -508,7 +536,9 @@ fun RideContent(
                     primaryFont = primaryFont,
                     secondaryFont = secondaryFont,
                     secondaryValues = listOf("%.2f ".format(screenValues.minVerticalSpeed), " %.2f".format(screenValues.maxVerticalSpeed)),
-                    onClick = { zoomedCard = "VerticalSpeed" }
+                    onClick = { zoomedCard = "VerticalSpeed" },
+                    isToggleBlocked = isToggleBlocked,
+                    isRecording = isRecording,
                     )
             }
         }
@@ -518,6 +548,8 @@ fun RideContent(
 @Composable
 fun MetricCard(
     modifier: Modifier,
+    isToggleBlocked: Boolean,
+    isRecording: Boolean,
     primaryValues: List<String>,
     primaryFont: TextUnit,
     secondaryFont: TextUnit,
@@ -531,9 +563,7 @@ fun MetricCard(
             .padding(0.dp)
             .fillMaxHeight(),
         shape = RectangleShape,
-        colors = CardDefaults.cardColors(
-            containerColor = Color.Black
-        ),
+        colors = CardDefaults.cardColors(containerColor = if (!isRecording) Color.Red else Color.Black),
         onClick = onClick
     ) {
 
@@ -719,56 +749,6 @@ fun computeFontSize(
 
     return minFontSize
 }
-/*
-@Composable
-fun AutoSizeRow(
-    values: List<String>,
-    modifier: Modifier = Modifier,
-    color: Color = Color.White,
-    maxFontSize: TextUnit = 22.sp,
-    minFontSize: TextUnit = 8.sp,
-    fontWeight: FontWeight? = null
-) {
-    var fontSize by remember(values) { mutableStateOf(maxFontSize) }
-    var overflow by remember(values) { mutableStateOf(false) }
-
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = when (values.size) {
-            1 -> Arrangement.Center
-            2 -> Arrangement.SpaceBetween
-            else -> Arrangement.SpaceEvenly
-        }
-    ) {
-
-        values.forEach { value ->
-
-            Text(
-                text = value,
-                modifier = Modifier.weight(1f),
-                color = color,
-                fontSize = fontSize,
-                fontWeight = fontWeight,
-                maxLines = 1,
-                softWrap = false,
-                textAlign = TextAlign.Center,
-                overflow = TextOverflow.Clip,
-
-                onTextLayout = { result ->
-                    if (result.hasVisualOverflow)
-                        overflow = true
-                }
-            )
-        }
-    }
-
-    LaunchedEffect(overflow) {
-        if (overflow && fontSize > minFontSize) {
-            overflow = false
-            fontSize = (fontSize.value - 1).sp
-        }
-    }
-}*/
 
 @Composable
 fun MapScreen(
@@ -922,78 +902,28 @@ fun MapScreen(
     }
 }
 
-//test pour expoter le fit:
-/*fun shareFitFile(context: Context) {
-
-    val fitFile = File(context.filesDir, "ride.fit")
-
-    if (!fitFile.exists()) {
-        return
-    }
-
-    val uri = FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.provider",
-        fitFile
-    )
-
-    val intent = Intent(Intent.ACTION_SEND).apply {
-
-        type = "application/octet-stream"
-
-        putExtra(Intent.EXTRA_STREAM, uri)
-
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-
-    context.startActivity(
-        Intent.createChooser(intent, "Partager l'activité")
-    )
-}*/
-
 fun mathAngleToCompassBearing(angleRad: Double): Float {
     val angleDeg = Math.toDegrees(angleRad)
     val bearing =  angleDeg - 90.0
     return ((bearing % 360.0 + 360.0) % 360.0).toFloat()
 }
 
-// --- Calcul d'un point de destination à partir d'un cap et d'une distance (formule sphérique) ---
-/*fun destinationPoint(lat: Double, lon: Double, bearingDeg: Double, distanceMeters: Double): GeoPoint {
-    val earthRadius = 6371000.0
-    val bearingRad = Math.toRadians(bearingDeg)
-    val lat1 = Math.toRadians(lat)
-    val lon1 = Math.toRadians(lon)
-
-    val lat2 = asin(
-        sin(lat1) * cos(distanceMeters / earthRadius) +
-                cos(lat1) * sin(distanceMeters / earthRadius) * cos(bearingRad)
-    )
-    val lon2 = lon1 + atan2(
-        sin(bearingRad) * sin(distanceMeters / earthRadius) * cos(lat1),
-        cos(distanceMeters / earthRadius) - sin(lat1) * sin(lat2)
-    )
-
-    return GeoPoint(Math.toDegrees(lat2), Math.toDegrees(lon2))
-}*/
-
 @Composable
 fun SensorView(
     screenValues: ScreenValues, 
     onConnectClick: (SensorType) -> Unit,
-    onSensorClick: (String) -> Unit
+    onSensorClick: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Color.DarkGray.copy(alpha = 0.3f))
-            .padding(2.dp),
+        modifier = modifier,
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
         SensorItem(
             modifier = Modifier.weight(1f),
             icon = "\u2665",
-            value = screenValues.heartRate?.toInt()?.toString(),
+            value = screenValues.correctedHeartRate?.toString(),
             onConnect = { onConnectClick(SensorType.HEART_RATE) },
             onClick = { onSensorClick("heartRate") }
         )

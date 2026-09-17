@@ -73,14 +73,14 @@ fun HeartRateView(
 
                 val labelFont = computeFontSize(
                     textMeasurer = textMeasurer,
-                    values = listOf("  rythme cardiaque  "),
+                    values = listOf("  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm"),
                     availableWidthPx = availableWidthPx,
                     maxFontSize = maxLabelFont,
                     minFontSize = 6.sp
                 ) * 1.2f
                 val valueFont = computeFontSize(
                     textMeasurer = textMeasurer,
-                    values = listOf("${screenValues.heartRate ?: "--"} bpm"),
+                    values = listOf("${screenValues.correctedHeartRate ?: "--"} bpm"),
                     availableWidthPx = availableWidthPx,
                     maxFontSize = maxValueFont,
                     minFontSize = 8.sp
@@ -92,7 +92,7 @@ fun HeartRateView(
                     Row()
                     {
                     Text(
-                        text = "  rythme cardiaque  ",
+                        text = "  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm",
                         color = Color.Gray,
                         fontSize = labelFont,
                         maxLines = 1,
@@ -110,8 +110,8 @@ fun HeartRateView(
                         }
                 }
                     Text(
-                        text = "${screenValues.heartRate ?: "--"} bpm",
-                        color = Color.Gray,
+                        text = "${screenValues.correctedHeartRate ?: "--"} bpm",
+                        color = Color.White,
                         fontSize = valueFont,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -145,11 +145,11 @@ fun HeartRateView(
                     val maxValueFont =
                         with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
                     val textMin =
-                        if ((screenValues.minHR ?: 0) == 0) "min: -- " else "${screenValues.minHR ?: "--"} bpm"
+                        if ((screenValues.minHR ?: 0) == 0) "min: -- " else "min: ${screenValues.minHR ?: "--"} bpm"
                     val textMax =
-                        if ((screenValues.maxHR ?: 0) == 0) "max: -- " else "${screenValues.maxHR ?: "--"} bpm"
+                        if ((screenValues.maxHR ?: 0) == 0) "max: -- " else "max: ${screenValues.maxHR ?: "--"} bpm"
                     val textAvg =
-                        if ((screenValues.avgHR ?: 0.0) < 1.0) "moy: -- " else screenValues.heartRate?.let { "%.0f bpm".format(it) } ?: "-- bpm"
+                        if (screenValues.avgHR < 1.0) "moy: -- " else screenValues.avgHR.let { "moy: %.0f bpm".format(it) }
                     val text = "$textMin         $textMax         $textAvg     "
 
                     val valueFont = computeFontSize(
