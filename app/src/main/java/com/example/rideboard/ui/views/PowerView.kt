@@ -86,8 +86,7 @@ fun PowerView(
         ) {
             val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-            val textToPrint = "Moy: ${screenValues.avgPower ?: "--"} W"
-
+            val textToPrint = "Moy: %.0f W".format(screenValues.avgPower?: 0.0)
             val maxValueFont =
                 with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
 
@@ -158,7 +157,7 @@ fun PowerView(
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(textToPrint1, textToPrint2),
+                            values = listOf("$textToPrint1 $textToPrint2"),
                             availableWidthPx = max(0.5f, availableWidthPx - 100),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
@@ -227,7 +226,7 @@ fun PowerView(
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(textToPrint1, textToPrint2),
+                            values = listOf("$textToPrint1 $textToPrint2"),
                             availableWidthPx = max(0.5f, availableWidthPx - 100),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
@@ -254,7 +253,7 @@ fun PowerView(
                             )
                         }
 
-                    }//fin de la box avec les constraints de la ligne power4
+                    }//fin de la box avec les constraints de la ligne 15
                     // Bouton tout à droite
                     Button(
                         onClick = {
@@ -291,12 +290,12 @@ fun PowerView(
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint1 = "VO2:  %.0f".format(screenValues.screenPower125)
+                        val textToPrint1 = "Vo2:  %.0f".format(screenValues.screenPower125)
                         val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower125)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(textToPrint1, textToPrint2),
+                            values = listOf("$textToPrint1 $textToPrint2"),
                             availableWidthPx = max(0.5f, availableWidthPx - 100),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
@@ -360,12 +359,12 @@ fun PowerView(
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint1 = "ftp:  %.0f".format(screenValues.screenPower1000)
+                        val textToPrint1 = "ftp:   %.0f".format(screenValues.screenPower1000)
                         val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower1000)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
-                            values = listOf(textToPrint1, textToPrint2),
+                            values = listOf("$textToPrint1 $textToPrint2"),
                             availableWidthPx = max(0.5f, availableWidthPx - 100),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
@@ -638,7 +637,7 @@ fun PowerView(
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint = "Z2: "+ formatDuration(screenValues.durationPowerZ5.toInt())
+                        val textToPrint = "Z5: "+ formatDuration(screenValues.durationPowerZ5.toInt())
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,

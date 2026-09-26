@@ -79,13 +79,18 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MyLocation
+import com.example.rideboard.utils.SensorConnectionStatus
+import com.example.rideboard.utils.SensorType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
 import com.example.rideboard.ui.views.HeartRateView
 import com.example.rideboard.ui.views.PowerView
 import com.example.rideboard.ui.views.VerticalSpeedView
-import com.example.rideboard.utils.SensorType
+import org.osmdroid.views.overlay.Polyline
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 @Composable
@@ -123,7 +128,52 @@ fun RideScreen(
     var isToggleBlocked by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var showStravaUpload by remember { mutableStateOf(false) }
+/*
+    val rideFile = remember { File(context.filesDir, "ride.tsv") }
+    var showStartupDialog by remember {
+        mutableStateOf(rideFile.exists() && rideFile.length() > 0)
+    }
 
+    if (showStartupDialog) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.9f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp).background(Color.DarkGray).padding(24.dp)
+            ) {
+                Text(
+                    "Une sortie précédente a été trouvée.",
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(24.dp))
+                Button(
+                    onClick = { showStartupDialog = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Green)
+                ) {
+                    Text("Continuer la sortie", color = Color.Black)
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        rideFile.writeText("")
+                        (File(context.filesDir, "gps_debug.txt")).writeText("")
+                        rideViewModel.clearTrack()
+                        showStartupDialog = false
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Nouvelle sortie", color = Color.White)
+                }
+            }
+        }
+        return
+    }
+*/
     if (isExporting) {
         Box(
             modifier = Modifier.fillMaxSize().background(Color.Black),
@@ -160,13 +210,25 @@ fun RideScreen(
                 context.startActivity(Intent.createChooser(shareIntent, "Export .fit"))
             },
             onDone = {
+                // Copie de ride.fit avec un nom horodaté (format AAMMJJHHMMSS), dans le sous-dossier "rides"
+                val dateFormat = SimpleDateFormat("yyMMddHHmmss", Locale.getDefault())
+                val timestamp = dateFormat.format(Date())
+                val sourceFile = File(context.getExternalFilesDir(null), "ride.fit")
+                val ridesDir = File(context.filesDir, "rides")
+                ridesDir.mkdirs() // crée le dossier (et ses parents si besoin) s'il n'existe pas déjà
+                val backupFile = File(ridesDir, "$timestamp.fit")
+                if (sourceFile.exists()) {
+                    sourceFile.copyTo(backupFile, overwrite = true)
+                }
                 // L'utilisateur confirme manuellement, ou upload déjà détecté automatiquement
                // (context as? Activity)?.finish()
                 (File(context.filesDir, "gps_debug.txt")).writeText("")
+                // On ne supprime plus le ride.tsv ici pour permettre la reprise au prochain démarrage
                 (File(context.filesDir, "ride.tsv")).writeText("")
                 //(File(context.filesDir, "ride.fit")).delete() (deleted juste avant la création du nouveau ride.fit, dans FitExporter)
                 (File(context.filesDir, "ride.gpx")).delete()
                 (File(context.filesDir, "ride.tcx")).delete()
+                rideViewModel.clearTrack()
                 context.stopService(Intent(context, LocationService::class.java))
                 (context as? Activity)?.finish()
             }
@@ -235,6 +297,7 @@ fun RideScreen(
         RideContent(
             modifier = Modifier.padding(padding),
             screenValues = screenValues,
+            trackPoints = rideViewModel.trackPoints.value,
             isToggleBlocked = isToggleBlocked,
             isRecording = isRecording,
             onConnectSensor = { type ->
@@ -249,6 +312,7 @@ fun RideScreen(
 fun RideContent(
     modifier: Modifier,
     screenValues: ScreenValues,
+    trackPoints: List<Pair<Double, Double>>,
     isToggleBlocked: Boolean,
     isRecording: Boolean,
     onConnectSensor: (SensorType) -> Unit
@@ -258,6 +322,7 @@ fun RideContent(
     }
 
     var zoomedCard by remember { mutableStateOf<String?>(null) }
+    var showTrace by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -297,6 +362,9 @@ fun RideContent(
                     latitude = screenValues.latitude ?: 0.0,
                     longitude = screenValues.longitude ?: 0.0,
                     direction = screenValues.direction ?: (3.1416 / 2.0),
+                    trackPoints = trackPoints,
+                    showTrace = showTrace,
+                    onToggleTrace = { showTrace = !showTrace },
                     isToggleBlocked = isToggleBlocked,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -398,8 +466,9 @@ fun RideContent(
                     .padding(2.dp)
                     .height(sensorBarHeight)
                     .background(
-                        if (zoomedCard == null) Color.Black.copy(alpha = 0.4f) // transparent sur la carte
-                        else Color.Black // opaque sur une SpecificView
+                        //if (zoomedCard == null)
+                            Color.Black.copy(alpha = 0.3f) // transparent sur la carte
+                        //else Color.Black // opaque sur une SpecificView
                     )
             )
         }
@@ -755,6 +824,9 @@ fun MapScreen(
     latitude: Double,
     longitude: Double,
     direction: Double, // -pi..pi, 0=est, pi/2=nord
+    trackPoints: List<Pair<Double, Double>>,
+    showTrace: Boolean,
+    onToggleTrace: () -> Unit,
     isToggleBlocked: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -782,6 +854,13 @@ fun MapScreen(
         }
     }
 
+    val polyline = remember {
+        Polyline(mapView).apply {
+            outlinePaint.color = android.graphics.Color.BLUE
+            outlinePaint.strokeWidth = 10f
+        }
+    }
+
     DisposableEffect(mapView, positionMarker) {
         mapView.overlays.add(positionMarker)
         onDispose { mapView.overlays.remove(positionMarker) }
@@ -793,7 +872,7 @@ fun MapScreen(
         val compassBearing = mathAngleToCompassBearing(direction)
 
         positionMarker.position = GeoPoint(latitude, longitude)
-        positionMarker.rotation = compassBearing.toFloat() // la flèche pointe selon le cap réel
+        positionMarker.rotation = compassBearing // la flèche pointe selon le cap réel
         mapView.invalidate()
 
         if (autoRecenter) {
@@ -801,25 +880,21 @@ fun MapScreen(
         }
     }
 
-    LaunchedEffect(latitude, longitude, direction, autoRecenter) {
-        // val compassBearing = mathAngleToCompassBearing(direction)
-        // mapView.mapOrientation = compassBearing.toFloat() // la carte tourne selon le cap réel
-
-        positionMarker.position = GeoPoint(latitude, longitude)
-        mapView.invalidate() // force le redessin
-
-        if (autoRecenter) {
-            mapView.controller.setCenter(GeoPoint(latitude, longitude))
+    LaunchedEffect(trackPoints, showTrace) {
+        if (showTrace) {
+            val geoPoints = trackPoints.map { GeoPoint(it.first, it.second) }
+            polyline.setPoints(geoPoints)
+            if (!mapView.overlays.contains(polyline)) {
+                mapView.overlays.add(0, polyline) // ajoute au fond
+            }
+        } else {
+            mapView.overlays.remove(polyline)
         }
+        mapView.invalidate()
     }
 
     DisposableEffect(Unit) {
         onDispose { mapView.onDetach() }
-    }
-
-    DisposableEffect(mapView, positionMarker) {
-        mapView.overlays.add(positionMarker)
-        onDispose { mapView.overlays.remove(positionMarker) }
     }
 
 
@@ -852,6 +927,18 @@ fun MapScreen(
             IconButton(onClick = { if (!isToggleBlocked) mapView.controller.zoomOut() }) {
                 Icon(Icons.Default.Remove, contentDescription = "Zoom -")
             }
+            
+            // Bouton de trace
+            IconButton(
+                onClick = onToggleTrace,
+                modifier = Modifier.background(if (showTrace) Color.Blue.copy(alpha = 0.5f) else Color.Transparent, CircleShape)
+            ) {
+                Text(
+                    text = "S", 
+                    color = if (showTrace) Color.White else Color.Gray,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         if (!autoRecenter) {
@@ -864,41 +951,6 @@ fun MapScreen(
                 Icon(Icons.Default.MyLocation, contentDescription = "Recentrer")
             }
         }
-
-        // Flèches de déplacement : la carte étant fixe (nord en haut),
-        // elles redeviennent Nord/Sud/Est/Ouest, pas relatives au cap
-  /*      val panStep = 30.0
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-        ) {
-            IconButton(onClick = {
-                autoRecenter = false
-                val c = mapView.mapCenter
-                mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 0.0, panStep))
-            }) { Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Nord") }
-
-            Row {
-                IconButton(onClick = {
-                    autoRecenter = false
-                    val c = mapView.mapCenter
-                    mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 270.0, panStep))
-                }) { Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Ouest") }
-
-                IconButton(onClick = {
-                    autoRecenter = false
-                    val c = mapView.mapCenter
-                    mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 90.0, panStep))
-                }) { Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Est") }
-            }
-
-            IconButton(onClick = {
-                autoRecenter = false
-                val c = mapView.mapCenter
-                mapView.controller.setCenter(destinationPoint(c.latitude, c.longitude, 180.0, panStep))
-            }) { Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Sud") }
-        }*/
     }
 }
 
@@ -915,29 +967,38 @@ fun SensorView(
     onSensorClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val sensorManager = AppConfig.sensorManager
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.SpaceAround,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        val hrStatus = sensorManager?.sensorStatuses?.get(SensorType.HEART_RATE) ?: SensorConnectionStatus.DISCONNECTED
         SensorItem(
             modifier = Modifier.weight(1f),
             icon = "\u2665",
             value = screenValues.correctedHeartRate?.toString(),
+            status = hrStatus,
             onConnect = { onConnectClick(SensorType.HEART_RATE) },
             onClick = { onSensorClick("heartRate") }
         )
+        
+        val pwrStatus = sensorManager?.sensorStatuses?.get(SensorType.POWER) ?: SensorConnectionStatus.DISCONNECTED
         SensorItem(
             modifier = Modifier.weight(1f),
             icon = "\u26A1",
             value = screenValues.power?.toString(),
+            status = pwrStatus,
             onConnect = { onConnectClick(SensorType.POWER) },
             onClick = { onSensorClick("power") }
         )
+        
+        val cadStatus = sensorManager?.sensorStatuses?.get(SensorType.CADENCE) ?: SensorConnectionStatus.DISCONNECTED
         SensorItem(
             modifier = Modifier.weight(1f),
             icon = "\u21BB",
             value = screenValues.cadence?.toString(),
+            status = cadStatus,
             onConnect = { onConnectClick(SensorType.CADENCE) },
             onClick = { onSensorClick("cadence") }
         )
@@ -949,10 +1010,19 @@ fun SensorItem(
     modifier: Modifier,
     icon: String,
     value: String?,
+    status: SensorConnectionStatus,
     onConnect: () -> Unit,
     onClick: () -> Unit
 ) {
     val textMeasurer = rememberTextMeasurer()
+    
+    val buttonColor = when (status) {
+        SensorConnectionStatus.SCANNING -> Color.Yellow
+        SensorConnectionStatus.CONNECTED -> Color.Green
+        SensorConnectionStatus.LOST -> Color.Red
+        SensorConnectionStatus.DISCONNECTED -> Color.DarkGray
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxHeight()
@@ -962,7 +1032,7 @@ fun SensorItem(
         val stringToPrint = if (value != null) " $icon $value " else " $icon "
         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.8f).toSp() }
+        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
 
         val valueFont = computeFontSize(
             textMeasurer = textMeasurer,
@@ -975,16 +1045,19 @@ fun SensorItem(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
-
         ) {
             Button(
                 onClick = onConnect,
-                modifier = Modifier.size(18.dp),
+                modifier = Modifier.size(25.dp),
                 contentPadding = PaddingValues(0.dp),
                 shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor)
             ) {
-                Text("+", fontSize = 9.sp, color = Color.White)
+                Text(
+                    text = "+", 
+                    fontSize = 20.sp, 
+                    color = if (status == SensorConnectionStatus.SCANNING) Color.Black else Color.White
+                )
             }
             Text(
                 text = stringToPrint,

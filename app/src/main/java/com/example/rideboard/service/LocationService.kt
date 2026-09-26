@@ -20,6 +20,7 @@ import kotlinx.coroutines.*
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -250,10 +251,12 @@ private fun roundToMillimeter(v: Double): Double {
 fun correctGpsPosition1MeterToLeft(buffer: GpsBuffer) {
     if (buffer.size < 3) return
     val lastDirection = buffer.getNthBeforeLast(3)?.gpsPointDirection
+    val lastSpeed = min(((buffer.getNthBeforeLast(2)?.speedGps)?:0.0).toDouble(), (buffer.getNthBeforeLast(3)?.gpsPointSpeed)?:0.0)
+    val correctionRate = if (lastSpeed < 1) 0.0 else if (lastSpeed < 2) lastSpeed/2.0 else 1.0
     if (lastDirection != null) {
         val sample = buffer.getNthBeforeLast(1) ?: return
-        sample.latitude += cos(lastDirection) * 0.000013 //- en roulant à gauche
-        sample.longitude -= sin(lastDirection) * 0.000013 //+= idem
+        sample.latitude += cos(lastDirection) * 0.000013 * correctionRate //- en roulant à gauche
+        sample.longitude -= sin(lastDirection) * 0.000013 * correctionRate //+= idem
     }
 }
 /*package com.example.rideboard.service

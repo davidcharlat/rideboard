@@ -19,18 +19,59 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import com.example.rideboard.config.AppConfig
 import kotlinx.coroutines.launch
+import java.io.File
 
 class RideViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _screenValues = mutableStateOf(ScreenValues())
     val screenValues: State<ScreenValues> = _screenValues
 
+    private val _trackPoints = mutableStateOf<List<Pair<Double, Double>>>(emptyList())
+    val trackPoints: State<List<Pair<Double, Double>>> = _trackPoints
+
     init {
+        loadTrackFromTsv()
         viewModelScope.launch {
             AppConfig.gpsUpdatesFlow.collect {
-                _screenValues.value = calculateScreenValues(GpsBuffer)
+                val newValues = calculateScreenValues(GpsBuffer)
+                _screenValues.value = newValues
+                
+                // On ajoute le nouveau point à la trace si les coordonnées sont valides
+                if (newValues.latitude != null && newValues.longitude != null) {
+                    _trackPoints.value = _trackPoints.value + Pair(newValues.latitude, newValues.longitude)
+                }
             }
         }
+    }
+
+    fun loadTrackFromTsv() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val file = File(getApplication<Application>().filesDir, "ride.tsv")
+            if (file.exists()) {
+                try {
+                    val points = mutableListOf<Pair<Double, Double>>()
+                    file.forEachLine { line ->
+                        val tokens = line.split("\t")
+                        if (tokens.size >= 3) {
+                            val lat = tokens[1].toDoubleOrNull()
+                            val lon = tokens[2].toDoubleOrNull()
+                            if (lat != null && lon != null) {
+                                points.add(Pair(lat, lon))
+                            }
+                        }
+                    }
+                    launch(Dispatchers.Main) {
+                        _trackPoints.value = points
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun clearTrack() {
+        _trackPoints.value = emptyList()
     }
 }
 

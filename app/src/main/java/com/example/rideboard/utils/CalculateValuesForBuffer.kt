@@ -6,12 +6,10 @@ import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
 import java.io.File
 import java.lang.Double.isNaN
-import java.lang.Math.pow
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -138,10 +136,10 @@ data class AccuracyOfCoordinates(
         val previousMinHR = if (latestGpsPoint.gpsPointStringToReset == "MinHR" || newGpsPoint.gpsPointStringToReset == "MinHR") null else previousGpsPoint.minHR
         val previousMaxHR = if (latestGpsPoint.gpsPointStringToReset == "MaxHR" || newGpsPoint.gpsPointStringToReset == "MaxHR") null else previousGpsPoint.maxHR
         val previousTotHRForAvg = if (latestGpsPoint.gpsPointStringToReset == "AvgHR" || newGpsPoint.gpsPointStringToReset == "AvgHR") 0 else previousGpsPoint.totHRForAvg
-        val previousMaxScreenPower4 = if (latestGpsPoint.gpsPointStringToReset == "MaxScreenPower4" || newGpsPoint.gpsPointStringToReset == "MaxScreenPower4") 0.0 else previousGpsPoint.maxScreenPower4
-        val previousMaxScreenPower15 = if (latestGpsPoint.gpsPointStringToReset == "MaxScreenPower15" || newGpsPoint.gpsPointStringToReset == "MaxScreenPower15") 0.0 else previousGpsPoint.maxScreenPower15
-        val previousMaxScreenPower125 = if (latestGpsPoint.gpsPointStringToReset == "MaxScreenPower125" || newGpsPoint.gpsPointStringToReset == "MaxScreenPower125") 0.0 else previousGpsPoint.maxScreenPower125
-        val previousMaxScreenPower1000 = if (latestGpsPoint.gpsPointStringToReset == "MaxScreenPower1000" || newGpsPoint.gpsPointStringToReset == "MaxScreenPower1000") 0.0 else previousGpsPoint.maxScreenPower1000
+        val previousMaxScreenPower4 = if (latestGpsPoint.gpsPointStringToReset == "MaxPower4" || newGpsPoint.gpsPointStringToReset == "MaxPower4") 0.0 else previousGpsPoint.maxScreenPower4
+        val previousMaxScreenPower15 = if (latestGpsPoint.gpsPointStringToReset == "MaxPower15" || newGpsPoint.gpsPointStringToReset == "MaxPower15") 0.0 else previousGpsPoint.maxScreenPower15
+        val previousMaxScreenPower125 = if (latestGpsPoint.gpsPointStringToReset == "MaxPower125" || newGpsPoint.gpsPointStringToReset == "MaxPower125") 0.0 else previousGpsPoint.maxScreenPower125
+        val previousMaxScreenPower1000 = if (latestGpsPoint.gpsPointStringToReset == "MaxPower1000" || newGpsPoint.gpsPointStringToReset == "MaxPower1000") 0.0 else previousGpsPoint.maxScreenPower1000
         val previousScreenPower4 =  previousGpsPoint.screenPower4
         val previousScreenPower15 =  previousGpsPoint.screenPower15
         val previousScreenPower125 =  previousGpsPoint.screenPower125
@@ -183,32 +181,38 @@ data class AccuracyOfCoordinates(
         } else null
         val newCorrectedHeartRate = calculateCorrectedHeartRate(latestGpsPoint, newGpsPoint, previousGpsPoint, bufferSnapshot[max(0,bufferSnapshot.size - 4)])
 
-        val deltaTimeInSecond = /*if (previousIsMoving) */ (newGpsPoint.timestamp - previousTime).toDouble() / 1000.0
-        //else (newGpsPoint.timestamp - previousTime).toDouble() / 500.0 + 4.0
+        val deltaTimeInSecond = if (previousIsMoving)  (newGpsPoint.timestamp - previousTime).toDouble() / 1000.0
+            else if (bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointIsMoving) (newGpsPoint.timestamp - bufferSnapshot[max(0,bufferSnapshot.size - 4)].timestamp).toDouble() / 1000.0
+            else if (bufferSnapshot[max(0,bufferSnapshot.size - 5)].gpsPointIsMoving) (newGpsPoint.timestamp - bufferSnapshot[max(0,bufferSnapshot.size - 5)].timestamp).toDouble() / 1000.0
+            //else if (bufferSnapshot[max(0,bufferSnapshot.size - 6)].gpsPointIsMoving) (newGpsPoint.timestamp - bufferSnapshot[max(0,bufferSnapshot.size - 6)].timestamp).toDouble() / 1000.0
+            else (newGpsPoint.timestamp - bufferSnapshot[max(0,bufferSnapshot.size - 6)].timestamp).toDouble() / 1000.0 //7 si if -6
+
         val durationTimeIntInSec = min(4,(deltaTimeInSecond + 0.5).toLong())
         val newCumulatedGpsPrecision = calculateNewCumulatedGpsPrecision (newGpsPoint, previousCumulatedGpsPrecision)
 
         if (!newIsStarted && newCumulatedGpsPrecision >1) {
             // startNewScreenValues (bufferSnapshot)
-            val pt1 = bufferSnapshot[bufferSnapshot.size-3]
-            val pt2 = bufferSnapshot[bufferSnapshot.size-2]
-            val pt3 = bufferSnapshot[bufferSnapshot.size-1]
+            val pt1 = previousGpsPoint
 
-            val newAltitude = simplifySampleAltitudeMnt(pt2, bufferSnapshot) ?: (simplifySampleAltitudeMnt(pt1, bufferSnapshot) ?: calculateAltitudeGps(pt1, pt2, pt3?:pt2, previousIsAltitudeGot, previousSpreadAltitudeAndAltitudeGps, previousUncorrectedGpsAltitude))
-            val newSpread = if (pt2.altitudeGps != null && newAltitude != null)
-                pt2.altitudeGps!! - newAltitude else null
+            val newAltitude = simplifySampleAltitudeMnt(newGpsPoint, bufferSnapshot) ?: (simplifySampleAltitudeMnt(pt1, bufferSnapshot) ?: calculateAltitudeGps(pt1,
+                newGpsPoint,
+                latestGpsPoint ?: newGpsPoint, previousIsAltitudeGot, previousSpreadAltitudeAndAltitudeGps, previousUncorrectedGpsAltitude))
+            val newSpread = if (newGpsPoint.altitudeGps != null && newAltitude != null)
+                newGpsPoint.altitudeGps!! - newAltitude else null
             //sample.gpsPointSpeed = 0.0
             //sample.gpsPointAcceleration :Double = 0.0
             //sample.gpsPointVerticalSpeed :Double = 0.0,
-            sample.gpsPointDirection = calculateDirectionBetweenTwoPoints(pt1.latitude, pt1.longitude, pt2.latitude, pt2.longitude)
+            sample.gpsPointDirection = calculateDirectionBetweenTwoPoints(pt1.latitude, pt1.longitude,
+                newGpsPoint.latitude,
+                newGpsPoint.longitude)
             sample.gpsPointAltitude = newAltitude
-            sample.gpsPointLatitude = pt2.latitude
-            sample.gpsPointLongitude = pt2.longitude
-            sample.gpsPointGpsAltitudeAccuracy = min((pt2.altitudeAccuracy ?: 299.9f).toDouble(), (pt1.altitudeAccuracy ?: 299.9f).toDouble())
+            sample.gpsPointLatitude = newGpsPoint.latitude
+            sample.gpsPointLongitude = newGpsPoint.longitude
+            sample.gpsPointGpsAltitudeAccuracy = min((newGpsPoint.altitudeAccuracy ?: 299.9f).toDouble(), (pt1.altitudeAccuracy ?: 299.9f).toDouble())
             sample.gpsPointAltitudeSourceMntMnsOrGps = if (newSpread != null) "MNT" else if (newAltitude != 0.0) "GPS" else ""
             sample.gpsPointSpreadAltitudeAndAltitudeGps = newSpread
-            sample.gpsPointCoefficientOfSpreadAltitudeAndAltitudeGps = if (newSpread!= null && pt2.altitudeAccuracy != null && pt2.altitudeAccuracy!!.toDouble() != 0.0)
-                1.0/(((pt2.altitudeAccuracy)?: 999.9f)).toDouble() else 0.0
+            sample.gpsPointCoefficientOfSpreadAltitudeAndAltitudeGps = if (newSpread!= null && newGpsPoint.altitudeAccuracy != null && newGpsPoint.altitudeAccuracy!!.toDouble() != 0.0)
+                1.0/(((newGpsPoint.altitudeAccuracy)?: 999.9f)).toDouble() else 0.0
             sample.gpsPointDurationAltitudeNotMnt = if (newSpread != null) 0 else 1
             //sample.gpsPointIsMoving: Boolean = false,
             sample.gpsPointIsStarted = true
@@ -470,11 +474,11 @@ data class AccuracyOfCoordinates(
         val altitudeMnsNewGpsPt = calculateCorrectedAltitudeMns(foundLastAltitudeLidarMns, foundLastAltitudeIgn, foundLastAltitudeSrtm,
             bufferSnapshot,
             newGpsPointLastDifferentLidarMns, newGpsPointLastDifferentIgn, newGpsPointLastDifferentSrtm).x
-        val time2 = System.currentTimeMillis()
+        //val time2 = System.currentTimeMillis()
 
         val altitudeMntMnsAccuracy = altitudeMntNewGpsPtAndAccuracy.y
 
-        val time3 = System.currentTimeMillis()
+        //val time3 = System.currentTimeMillis()
 
         val altitudeGpsNewGpsPt = calculateAltitudeGps(previousGpsPoint, newGpsPoint, latestGpsPoint, previousIsAltitudeGot, previousSpreadAltitudeAndAltitudeGps, previousUncorrectedGpsAltitude)
         val altitudeGpsAccuracy = calculateGpsAltitudeAccuracy(newGpsPoint,previousGpsAltitudeAccuracy)
@@ -549,27 +553,22 @@ data class AccuracyOfCoordinates(
             sample.maxScreenPower15 = previousMaxScreenPower15
             sample.maxScreenPower125 = previousMaxScreenPower125
             sample.maxScreenPower1000 = previousMaxScreenPower1000
-            sample.screenPower4 = run{ if (actualPower != null) {
+            sample.screenPower4 = run{
                 val kept = (3.0/4.0).pow(deltaTimeInSecond)
-                previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-            else previousScreenPower4 }
-            sample.screenPower15 = run{ if (actualPower != null) {
+                if (actualPower != null) previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
+            else previousScreenPower4 * kept.pow(1.0/3.0) }
+            sample.screenPower15 = run{
                 val kept = (14.0/15.0).pow(deltaTimeInSecond)
-                previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-            else previousScreenPower15 }
-            sample.screenPower125 = run{ if (actualPower != null) {
+                if (actualPower != null) previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
+                else previousScreenPower15 * kept.pow(1.0/3.0) }
+            sample.screenPower125 = run{
                 val kept = (124.0/125.0).pow(deltaTimeInSecond)
-                previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-            else previousScreenPower125 }
-            sample.screenPower1000 = run{ if (actualPower != null) {
-            val kept = (999.0/1000.0).pow(deltaTimeInSecond)
-            previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-            else previousScreenPower1000
-            }
+                if (actualPower != null) previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
+                else previousScreenPower125 * kept.pow(1.0/3.0) }
+            sample.screenPower1000 = run{
+                val kept = (999.0/1000.0).pow(deltaTimeInSecond)
+                if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
+                else previousScreenPower1000 * kept.pow(1.0/3.0) }
         sample.totalPowerForAveragePower = previousTotalPowerForAveragePower
         sample.durationForAveragePower = previousDurationForAveragePower
         sample.durationPowerZ2 = previousDurationPowerZ2
@@ -658,27 +657,22 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
         sample.maxScreenPower15 = previousMaxScreenPower15
         sample.maxScreenPower125 = previousMaxScreenPower125
         sample.maxScreenPower1000 = previousMaxScreenPower1000
-        sample.screenPower4 = run{ if (actualPower != null) {
-            val kept = (3.0/4.0).pow(deltaTimeInSecond)
-            previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-        else previousScreenPower4 }
-        sample.screenPower15 = run{ if (actualPower != null) {
-            val kept = (14.0/15.0).pow(deltaTimeInSecond)
-            previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-        else previousScreenPower15 }
-        sample.screenPower125 = run{ if (actualPower != null) {
-            val kept = (124.0/125.0).pow(deltaTimeInSecond)
-            previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-        else previousScreenPower125 }
-        sample.screenPower1000 = run{ if (actualPower != null) {
-            val kept = (999.0/1000.0).pow(deltaTimeInSecond)
-            previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
-            }
-        else previousScreenPower1000
-        }
+    sample.screenPower4 = run{
+        val kept = (3.0/4.0).pow(deltaTimeInSecond)
+        if (actualPower != null) previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
+        else previousScreenPower4 * kept.pow(1.0/3.0) }
+    sample.screenPower15 = run{
+        val kept = (14.0/15.0).pow(deltaTimeInSecond)
+        if (actualPower != null) previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
+        else previousScreenPower15 * kept.pow(1.0/3.0) }
+    sample.screenPower125 = run{
+        val kept = (124.0/125.0).pow(deltaTimeInSecond)
+        if (actualPower != null) previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
+        else previousScreenPower125 * kept.pow(1.0/3.0) }
+    sample.screenPower1000 = run{
+        val kept = (999.0/1000.0).pow(deltaTimeInSecond)
+        if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
+        else previousScreenPower1000 * kept.pow(1.0/3.0) }
         sample.totalPowerForAveragePower = previousTotalPowerForAveragePower
         sample.durationForAveragePower = previousDurationForAveragePower
         sample.durationPowerZ2 = previousDurationPowerZ2
@@ -700,7 +694,7 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
         return
     }
 
-    val newIsMoving = true
+    //val newIsMoving = true
     val newDirection = calculateNewDirection (previousLatitude, previousLongitude, latestGpsPoint, newGpsPoint, previousGpsPoint, previousDirection)
     val speedCorrectionRatio = calculateSpeedCorrectionRatio(
         calculateAngleBetweenTwoDirection(previousDirection, newDirection))*1.004 // corection empirique minimale (= tendance de l'algorythme à couper les virages?)
@@ -736,10 +730,13 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
         val speedGps1 = (latestGpsPoint.speedGps?: newGpsPoint.speedGps?: previousSpeed).toDouble()
         val speedGps2 = (newGpsPoint.speedGps?: latestGpsPoint.speedGps?: previousSpeed).toDouble()
         val speedGps0 = (if(speedGps1 == 0.0 && speedGps2 == 0.0)previousGpsPoint.speedGps?:previousSpeed else speedGps1).toDouble()
-        val speedPoint = (calculateDistanceBetweenTwoGpsPoints(previousLatitude?:newGpsPoint.latitude, previousLongitude?:newGpsPoint.longitude, newGpsPoint.latitude, newGpsPoint.longitude))/deltaTimeInSecond
+        val speedPoints = (calculateDistanceBetweenTwoGpsPoints(previousGpsPoint.latitude, previousGpsPoint.longitude, newGpsPoint.latitude, newGpsPoint.longitude))/((newGpsPoint.timestamp-previousGpsPoint.timestamp).toDouble()/1000.0)
+        val speedPoint = (calculateDistanceBetweenTwoGpsPoints(previousLatitude?:newGpsPoint.latitude, previousLongitude?:newGpsPoint.longitude, newGpsPoint.latitude, newGpsPoint.longitude))/((newGpsPoint.timestamp-previousGpsPoint.timestamp).toDouble()/1000.0)
         val speedPoint2 = (calculateDistanceBetweenTwoGpsPoints(previousLatitude?:latestGpsPoint.latitude, previousLongitude?:latestGpsPoint.longitude, latestGpsPoint.latitude, latestGpsPoint.longitude))/((latestGpsPoint.timestamp-previousGpsPoint.timestamp).toDouble()/1000.0)
-        val speed = if ((speedGps1 > previousSpeed && speedGps2 < previousSpeed) || (speedGps1 < previousSpeed && speedGps2 > previousSpeed)) previousSpeed
-        else listOf(speedGps1, speedGps2, speedPoint, speedPoint2, speedGps0).minByOrNull { abs(it - previousSpeed) } ?:previousSpeed
+        var speed = if ((speedGps1 > previousSpeed && speedGps2 < previousSpeed) || (speedGps1 < previousSpeed && speedGps2 > previousSpeed)) previousSpeed
+        else listOf(speedGps1, speedGps2, speedPoint, speedPoints, speedGps0).minByOrNull { abs(it - previousSpeed) } ?:previousSpeed
+        if (speedPoint > 0.2 + 1.9 * speedPoints || speedPoint2 > 0.2 + 1.9 * speedPoints) speed = 1.05 * speed + 0.2
+        if (speedPoint > 0.4 + 3.9 * speedPoints) speed = 1.05 * speed + 0.2
         speed
     }
         /*maxOf(
@@ -979,30 +976,25 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
     sample.maxHR = if ((newCorrectedHeartRate?:0) > 0 && previousMaxHR != null) max(newCorrectedHeartRate!!, previousMaxHR) else if(previousMaxHR == null && newCorrectedHeartRate != null) newCorrectedHeartRate else previousMaxHR
     sample.totHRForAvg = if ((newCorrectedHeartRate?:0) > 0) previousTotHRForAvg + newCorrectedHeartRate!!*durationTimeIntInSec else previousTotHRForAvg
     sample.correctedHeartRate = newCorrectedHeartRate
-        sample.screenPower4 = run{ if (actualPower != null) {
+        sample.screenPower4 = run{
             val kept = (3.0/4.0).pow(deltaTimeInSecond)
-            previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
-        }
-        else previousScreenPower4 }
+            if (actualPower != null) previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
+            else previousScreenPower4 * kept.pow(1.0/3.0) }
     sample.maxScreenPower4 = max(previousMaxScreenPower4,sample.screenPower4)
-        sample.screenPower15 = run{ if (actualPower != null) {
+        sample.screenPower15 = run{
             val kept = (14.0/15.0).pow(deltaTimeInSecond)
-            previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
-        }
-        else previousScreenPower15 }
+            if (actualPower != null) previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
+            else previousScreenPower15 * kept.pow(1.0/3.0) }
         sample.maxScreenPower15 = max(previousMaxScreenPower15,sample.screenPower15)
-        sample.screenPower125 = run{ if (actualPower != null) {
+        sample.screenPower125 = run{
             val kept = (124.0/125.0).pow(deltaTimeInSecond)
-            previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
-        }
-        else previousScreenPower125 }
+            if (actualPower != null) previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
+            else previousScreenPower125 * kept.pow(1.0/3.0) }
         sample.maxScreenPower125 = max(previousMaxScreenPower125,sample.screenPower125)
-        sample.screenPower1000 = run{ if (actualPower != null) {
+        sample.screenPower1000 = run{
             val kept = (999.0/1000.0).pow(deltaTimeInSecond)
-            previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
-        }
-        else previousScreenPower1000
-        }
+            if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
+            else previousScreenPower1000 * kept.pow(1.0/3.0) }
         sample.maxScreenPower1000 = max(previousMaxScreenPower1000,sample.screenPower1000)
         sample.totalPowerForAveragePower = if (newSpeed>SPEED_FOR_AVERAGE_POWER) previousTotalPowerForAveragePower + durationTimeIntInSec * (actualPower?:0)
         else previousTotalPowerForAveragePower
@@ -1023,17 +1015,7 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
     //sample.gpsPointScreenValueBoolean: Boolean? = false,
     //sample.gpsPointScreenValueLong: Long? = 0,
     sample.gpsPointScreenValueInt = buffer.size
-   /*
-    AppConfig.gpsPointIsAltitudeGot = newAltitude!=null
-    AppConfig.gpsPointIsGpsAltitudeGot = newIsGpsAltitudeGot
-    AppConfig.gpsPointIsMoving = newIsMoving
-    AppConfig.gpsPointUncorrectedGpsAltitude = calculateUncorrectedGpsAltitude (previousGpsPoint, newGpsPoint, latestGpsPoint, previousUncorrectedGpsAltitude)
-    AppConfig.gpsPointDurationHighSpreadAltitude = newDurationHighSpreadAltitude
-    AppConfig.gpsPointDisplayedAltitude = newAltitude
-    AppConfig.gpsPointDisplayedVerticalSpeed = newVerticalSpeed/2.0 + previousVerticalSpeed/2.0
-    AppConfig.gpsPointDisplayedSpeed = max(0.3*(previousGpsPoint.speedGps?:0.0).toDouble() + 0.7*(newGpsPoint.speedGps?:0.0).toDouble(), 0.4*previousSpeed + 0.6 * newSpeed)
 
-*/
     FitExporter.fileTsvFile(context,File(context.filesDir, "ride.tsv"),newGpsPoint.timestamp,
         listOf (
             newGpsPoint.gpsPointLatitude,
@@ -1682,35 +1664,36 @@ fun calculateNewHorizontalDistanceDone (
     ): Double {
         //val deltaAltitude = if (possibleNewAltitude == null || previousValues.altitude == null) 0.0 else possibleNewAltitude - previousValues.altitude
         val expectedMaxHorizontalDistance = max(
-            sqrt(maxExpectedDistance * maxExpectedDistance - (deltaAltitude)*(deltaAltitude)),
+            sqrt(max(0.0,maxExpectedDistance * maxExpectedDistance - (deltaAltitude)*(deltaAltitude))),
             maxExpectedDistance/1.15
         )/speedCorrectionRatio
         val expectedHorizontalDistance = max(
-            sqrt(expectedDistance * expectedDistance - (deltaAltitude)*(deltaAltitude)),
+            sqrt(max(0.0,expectedDistance * expectedDistance - (deltaAltitude)*(deltaAltitude))),
             expectedDistance/1.15,
         )/speedCorrectionRatio
         val expectedMinHorizontalDistance = max(
-            sqrt(minExpectedDistance * minExpectedDistance - (deltaAltitude)*(deltaAltitude)),
+            sqrt(max(0.0,minExpectedDistance * minExpectedDistance - (deltaAltitude)*(deltaAltitude))),
             minExpectedDistance/1.15
         )/speedCorrectionRatio
         val gpsUncertainty = newPoint.accuracy.toDouble() + 0.05
         val functionForDistanceAccordingToGpsAccuracy = { x: Double ->
-            1 / ((distanceToNewPointProjectedOnNewDir - x) * (distanceToNewPointProjectedOnNewDir - x) / (3.0 * gpsUncertainty * gpsUncertainty) + 1)
+            val unit = 1 / ((distanceToNewPointProjectedOnNewDir - x) * (distanceToNewPointProjectedOnNewDir - x) / (3.0 * gpsUncertainty * gpsUncertainty) + 1)
+            unit * unit
         }
 
         val functionForDistanceAccordingToGpsPoints = { x: Double ->
             val speed01 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
                 previousLongitude?: newPoint.longitude,
                 newPoint.latitude,
-                newPoint.longitude)/deltaTimeInSecond
+                newPoint.longitude)/((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0)
             val speed02 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
                 previousLongitude?: newPoint.longitude,
                 latestPoint.latitude,
-                latestPoint.longitude)/(deltaTimeInSecond+(newPoint.timestamp-latestPoint.timestamp)/1000.0)
-            val speed12 = calculateDistanceBetweenTwoGpsPoints (newPoint.latitude,
+                latestPoint.longitude)/((latestPoint.timestamp-oldPoint.timestamp)/1000.0)
+            val speed12 = (calculateDistanceBetweenTwoGpsPoints (newPoint.latitude,
                 latestPoint.latitude,
                 newPoint.longitude,
-                latestPoint.longitude)/((newPoint.timestamp-latestPoint.timestamp)/1000.0)
+                latestPoint.longitude)/((latestPoint.timestamp-newPoint.timestamp)/1000.0))*0.9 + 0.05 * speed01 + 0.05 * speed02
             val speed = (listOf(speed01,speed02,speed12).minByOrNull { abs(it-previousSpeed)  })?:previousSpeed
             val distance = speed * deltaTimeInSecond
             try { val unit = 1 / ((x - distance) * (x - distance) / ((expectedMaxHorizontalDistance * expectedMaxHorizontalDistance ) + 1))
@@ -1718,15 +1701,15 @@ fun calculateNewHorizontalDistanceDone (
         }
 
         val functionForDistanceAccordingToExpectedDistance = { x: Double ->
-            val unit = 1 / ((x - expectedHorizontalDistance)  * (x - expectedHorizontalDistance) / (expectedMaxHorizontalDistance  * expectedMaxHorizontalDistance ) + 1)
+            val unit = 1 / ((x - expectedHorizontalDistance)  * (x - expectedHorizontalDistance) / (expectedHorizontalDistance  * expectedHorizontalDistance ) + 1)
             unit
         }
 
         val functionForDistanceAccordingToGpsSpeed = { x: Double ->
             val speed = ((newPoint.speedGps)?:previousSpeed).toDouble()
-            val uncertainty = ((newPoint.speedAccuracy)?:3.0).toDouble() + 0.03
+            val uncertainty= ((newPoint.speedAccuracy)?:3.0).toDouble() + 0.03
             val unit = 1 / (((x-speed)*(x-speed)/(uncertainty*uncertainty))+1)
-            unit*unit
+            unit
         }
 
         val functionOfProbabilityAccordingToDistance = { x: Double -> functionForDistanceAccordingToGpsSpeed(x)*functionForDistanceAccordingToExpectedDistance(x) * functionForDistanceAccordingToGpsPoints (x) * functionForDistanceAccordingToGpsAccuracy (x) }
@@ -1741,15 +1724,16 @@ fun calculateNewHorizontalDistanceDone (
         return distanceDone  // calculateDistanceBetweenTwoGpsPoints(previousValues.latitude?: newPoint.latitude, previousValues.longitude?: newPoint.longitude, newPoint.latitude, newPoint.longitude)
 
     }
-
+    val timeInterval = min ((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0,(latestPoint.timestamp-newPoint.timestamp).toDouble()/1000.0)
     val distanceToNewPointProjectedOnNewDir =
         calculateDistanceToNewPointProjectedOnNewDir(newPoint, newDirection, previousDirection, previousLatitude, previousLongitude)
-    return calculateDistanceDone(expectedDistance, maxExpectedDistance, minExpectedDistance,
+    return min (calculateDistanceDone(expectedDistance, maxExpectedDistance, minExpectedDistance,
         distanceToNewPointProjectedOnNewDir,
         newPoint,
         speedCorrectionRatio,
         deltaAltitude,
-        previousSpeed)
+        previousSpeed),
+        timeInterval*(previousSpeed+3.0-min(1.0,previousSpeed)))
 }
 
 fun calculateNewLatitude ( previousLatitude: Double?,previousLongitude: Double?, newDirection: Double, newHorizontalDistanceDone: Double, newPoint: GpsSample, previousAltitude: Double?): Double {
