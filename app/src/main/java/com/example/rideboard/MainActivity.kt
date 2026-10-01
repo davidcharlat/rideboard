@@ -35,7 +35,8 @@ class MainActivity : ComponentActivity() {
     ])
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        //lecture des donnees de HRZ, PowerZone etc...
+        AppSettings.load(applicationContext)
         // --- Base de données
         val db = Room.databaseBuilder(
             applicationContext,

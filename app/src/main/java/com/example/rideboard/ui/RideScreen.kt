@@ -2,7 +2,6 @@ package com.example.rideboard.ui
 
 import android.Manifest
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.view.MotionEvent
@@ -35,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,8 +48,6 @@ import com.example.rideboard.utils.ScreenValues
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.sin
-import kotlin.math.cos
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -59,25 +55,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
-import androidx.core.net.toUri
 
 // pour la maps
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import com.example.rideboard.R
 import androidx.core.content.ContextCompat
-import kotlin.math.asin
-import kotlin.math.atan2
 
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.MyLocation
 import com.example.rideboard.utils.SensorConnectionStatus
 import com.example.rideboard.utils.SensorType
@@ -128,6 +116,8 @@ fun RideScreen(
     var isToggleBlocked by remember { mutableStateOf(false) }
     var isExporting by remember { mutableStateOf(false) }
     var showStravaUpload by remember { mutableStateOf(false) }
+    var setValuesScreen by remember { mutableStateOf(false) }
+    var setPointsScreen by remember { mutableStateOf(false) }
 /*
     val rideFile = remember { File(context.filesDir, "ride.tsv") }
     var showStartupDialog by remember {
@@ -237,6 +227,24 @@ fun RideScreen(
     }
 
 
+    if (setValuesScreen) {
+        SetValuesScreen(
+            onDone = { setValuesScreen = false }
+        )
+        return
+    }
+
+    if (setPointsScreen) {
+        SetPointsScreen(
+            onDone = { setPointsScreen = false }
+        )
+        return
+    }
+
+
+
+
+
     LaunchedEffect(Unit) {
         snapshotFlow { AppConfig.isRecording }
             .collect { isRecording = it }
@@ -277,6 +285,12 @@ fun RideScreen(
                 onToggleBlocked = {
                     isToggleBlocked = !isToggleBlocked
                    // AppConfig.isToggleBlocked = !AppConfig.isToggleBlocked
+                },
+                onTogglePoints = {
+                    if (!isToggleBlocked && !isRecording) setPointsScreen = true
+                },
+                onToggleSettings = {
+                    if (!isToggleBlocked && !isRecording) setValuesScreen = true
                 },
                 onToggleRecording = {
                     if (!isToggleBlocked) {
@@ -708,7 +722,9 @@ fun RideBottomBar(
     isRecording: Boolean,
     onToggleGps: () -> Unit,
     onToggleBlocked: () -> Unit,
-    onToggleRecording: () -> Unit
+    onToggleRecording: () -> Unit,
+    onToggleSettings: () -> Unit,
+    onTogglePoints: () -> Unit
 ) {
     BoxWithConstraints(
         modifier = Modifier
@@ -717,12 +733,27 @@ fun RideBottomBar(
             .height(34.dp)
     ) {
         val buttonWidth = maxWidth * 0.25f
+        val buttonSetValuesWidth = maxWidth * 0.07f
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Button(
+                onClick = onTogglePoints,
+                modifier = Modifier.width(buttonSetValuesWidth),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRecording) Color.Black else Color.Green
+                )
+            ) {
+                Text(
+                    text = if (isRecording) " " else "S",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Button(
                 onClick = onToggleGps,
                 modifier = Modifier.width(buttonWidth),
@@ -759,64 +790,22 @@ fun RideBottomBar(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            Button(
+                onClick = onToggleSettings,
+                modifier = Modifier.width(buttonSetValuesWidth),
+                contentPadding = PaddingValues(0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRecording) Color.Black else Color.Green
+                )
+            ) {
+                Text(
+                text = if (isRecording) " " else "+",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
-}
-
-fun formatDate(timestamp: Long): String {
-    val instant = Instant.ofEpochMilli(timestamp)
-    val formatter = DateTimeFormatter.ofPattern("EEE dd/MM/yy")
-        .withZone(ZoneId.systemDefault())
-    return formatter.format(instant)
-}
-fun formatDuration(seconds: Int): String {
-    val duration = Duration.ofSeconds(seconds.toLong())
-
-    val hours = duration.toHours()
-    val minutes = duration.toMinutes() % 60
-    val secs = duration.seconds % 60
-
-    return if (hours > 0)
-        "%d:%02d:%02d".format(hours, minutes, secs)
-    else
-        "%02d:%02d".format(minutes, secs)
-}
-
-fun formatTime(timestamp: Long): String {
-    val instant = Instant.ofEpochMilli(timestamp)
-    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss")
-        .withZone(ZoneId.systemDefault())
-    return formatter.format(instant)
-}
-
-fun computeFontSize(
-    textMeasurer: TextMeasurer,
-    values: List<String>,
-    availableWidthPx: Float,
-    maxFontSize: TextUnit,
-    minFontSize: TextUnit
-): TextUnit {
-
-    var font = maxFontSize
-
-    while (font.value >= minFontSize.value) {
-
-        val ok = values.all { value ->
-
-            val result = textMeasurer.measure(
-                text = value,
-                style = TextStyle(fontSize = font)
-            )
-
-            result.size.width <= availableWidthPx
-        }
-
-        if (ok) return font
-
-        font = (font.value - 2).sp // plus stable que -1.sp
-    }
-
-    return minFontSize
 }
 
 @Composable
@@ -836,7 +825,7 @@ fun MapScreen(
                 MapView(context).apply {
                     setTileSource(TileSourceFactory.OpenTopo)  //MAPNIK
                     setMultiTouchControls(true)
-                    controller.setZoom(15.0)
+                    controller.setZoom(14.9)
 
                         // mapOrientation reste à sa valeur par défaut (0 = nord en haut)
                     }
@@ -1232,6 +1221,61 @@ fun SpecificView(
     }
 
 
+fun formatDate(timestamp: Long): String {
+    val instant = Instant.ofEpochMilli(timestamp)
+    val formatter = DateTimeFormatter.ofPattern("EEE dd/MM/yy")
+        .withZone(ZoneId.systemDefault())
+    return formatter.format(instant)
+}
+fun formatDuration(seconds: Int): String {
+    val duration = Duration.ofSeconds(seconds.toLong())
+
+    val hours = duration.toHours()
+    val minutes = duration.toMinutes() % 60
+    val secs = duration.seconds % 60
+
+    return if (hours > 0)
+        "%d:%02d:%02d".format(hours, minutes, secs)
+    else
+        "%02d:%02d".format(minutes, secs)
+}
+
+fun formatTime(timestamp: Long): String {
+    val instant = Instant.ofEpochMilli(timestamp)
+    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(ZoneId.systemDefault())
+    return formatter.format(instant)
+}
+
+fun computeFontSize(
+    textMeasurer: TextMeasurer,
+    values: List<String>,
+    availableWidthPx: Float,
+    maxFontSize: TextUnit,
+    minFontSize: TextUnit
+): TextUnit {
+
+    var font = maxFontSize
+
+    while (font.value >= minFontSize.value) {
+
+        val ok = values.all { value ->
+
+            val result = textMeasurer.measure(
+                text = value,
+                style = TextStyle(fontSize = font)
+            )
+
+            result.size.width <= availableWidthPx
+        }
+
+        if (ok) return font
+
+        font = (font.value - 2).sp // plus stable que -1.sp
+    }
+
+    return minFontSize
+}
 
 
 

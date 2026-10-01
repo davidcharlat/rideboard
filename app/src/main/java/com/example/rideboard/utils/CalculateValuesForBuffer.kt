@@ -1,6 +1,7 @@
 package com.example.rideboard.utils
 
 import android.content.Context
+import com.example.rideboard.AppSettings
 import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
@@ -19,15 +20,14 @@ import kotlin.math.pow
 const val MIN_SPEED = 0.1
 const val STEP_FOR_ELEVATION_GAIN = 0.1
 const val SPEED_FOR_AVERAGE_POWER = 1.2
-const val POWER_ZONE_2 = 120
-const val POWER_ZONE_3 = 230
-const val POWER_ZONE_4 = 380
-const val POWER_ZONE_5 = 500
-const val HRZ2 = 112
-const val HRZ3 = 138
-const val HRZ4 = 155
-const val HRZ5 = 163
-
+val POWER_ZONE_2 = AppSettings.powerZone2
+val POWER_ZONE_3 = AppSettings.powerZone3
+val POWER_ZONE_4 = AppSettings.powerZone4
+val POWER_ZONE_5 = AppSettings.powerZone5
+val HRZ2 = AppSettings.hrZone2
+val HRZ3 = AppSettings.hrZone3
+val HRZ4 = AppSettings.hrZone4
+val HRZ5 = AppSettings.hrZone5
 
 
 data class Coordinates(
@@ -735,7 +735,7 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
         val speedPoint2 = (calculateDistanceBetweenTwoGpsPoints(previousLatitude?:latestGpsPoint.latitude, previousLongitude?:latestGpsPoint.longitude, latestGpsPoint.latitude, latestGpsPoint.longitude))/((latestGpsPoint.timestamp-previousGpsPoint.timestamp).toDouble()/1000.0)
         var speed = if ((speedGps1 > previousSpeed && speedGps2 < previousSpeed) || (speedGps1 < previousSpeed && speedGps2 > previousSpeed)) previousSpeed
         else listOf(speedGps1, speedGps2, speedPoint, speedPoints, speedGps0).minByOrNull { abs(it - previousSpeed) } ?:previousSpeed
-        if (speedPoint > 0.2 + 1.9 * speedPoints || speedPoint2 > 0.2 + 1.9 * speedPoints) speed = 1.05 * speed + 0.2
+        if (speedPoint > 0.2 + 1.9 * speedPoints || speedPoint2 > 0.2 + 1.9 * speedPoints) speed = 1.1 * speed + 0.2
         if (speedPoint > 0.4 + 3.9 * speedPoints) speed = 1.05 * speed + 0.2
         speed
     }
@@ -1681,20 +1681,20 @@ fun calculateNewHorizontalDistanceDone (
             unit * unit
         }
 
+        val speed01 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
+            previousLongitude?: newPoint.longitude,
+            newPoint.latitude,
+            newPoint.longitude)/((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0)
+        val speed02 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
+            previousLongitude?: newPoint.longitude,
+            latestPoint.latitude,
+            latestPoint.longitude)/((latestPoint.timestamp-oldPoint.timestamp)/1000.0)
+        val speed12 = (calculateDistanceBetweenTwoGpsPoints (newPoint.latitude,
+            latestPoint.latitude,
+            newPoint.longitude,
+            latestPoint.longitude)/((latestPoint.timestamp-newPoint.timestamp)/1000.0))*0.85 + 0.05 * speed01 + 0.1 * speed02
         val functionForDistanceAccordingToGpsPoints = { x: Double ->
-            val speed01 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
-                previousLongitude?: newPoint.longitude,
-                newPoint.latitude,
-                newPoint.longitude)/((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0)
-            val speed02 = calculateDistanceBetweenTwoGpsPoints(previousLatitude?: newPoint.latitude,
-                previousLongitude?: newPoint.longitude,
-                latestPoint.latitude,
-                latestPoint.longitude)/((latestPoint.timestamp-oldPoint.timestamp)/1000.0)
-            val speed12 = (calculateDistanceBetweenTwoGpsPoints (newPoint.latitude,
-                latestPoint.latitude,
-                newPoint.longitude,
-                latestPoint.longitude)/((latestPoint.timestamp-newPoint.timestamp)/1000.0))*0.9 + 0.05 * speed01 + 0.05 * speed02
-            val speed = (listOf(speed01,speed02,speed12).minByOrNull { abs(it-previousSpeed)  })?:previousSpeed
+           val speed = (listOf(speed01,speed02,speed12).minByOrNull { abs(it-previousSpeed)  })?:previousSpeed
             val distance = speed * deltaTimeInSecond
             try { val unit = 1 / ((x - distance) * (x - distance) / ((expectedMaxHorizontalDistance * expectedMaxHorizontalDistance ) + 1))
                 unit} catch (e: Exception) {previousSpeed*deltaTimeInSecond}
@@ -1721,7 +1721,10 @@ fun calculateNewHorizontalDistanceDone (
             if (previousLatitude!=null && previousLongitude!=null) {calculateDistanceBetweenTwoGpsPoints(previousLatitude, previousLongitude, newPoint.latitude, newPoint.longitude)}
             else 0.01
         }
-        return distanceDone  // calculateDistanceBetweenTwoGpsPoints(previousValues.latitude?: newPoint.latitude, previousValues.longitude?: newPoint.longitude, newPoint.latitude, newPoint.longitude)
+        return try {
+            val ratioOfSpeed = max(0.0,(speed01+0.1)/(speed12+0.1)-2.5)
+            distanceDone * (1.0 + 0.075 * ratioOfSpeed*ratioOfSpeed/(ratioOfSpeed*ratioOfSpeed+4.0))//cette petite correction pour que les points calculés rattrapent le point gps brut
+        }catch (e: Exception) {distanceDone}  // calculateDistanceBetweenTwoGpsPoints(previousValues.latitude?: newPoint.latitude, previousValues.longitude?: newPoint.longitude, newPoint.latitude, newPoint.longitude)
 
     }
     val timeInterval = min ((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0,(latestPoint.timestamp-newPoint.timestamp).toDouble()/1000.0)
