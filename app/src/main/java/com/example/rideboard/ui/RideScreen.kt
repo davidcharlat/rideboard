@@ -236,6 +236,7 @@ fun RideScreen(
 
     if (setPointsScreen) {
         SetPointsScreen(
+            rideViewModel = rideViewModel,
             onDone = { setPointsScreen = false }
         )
         return
