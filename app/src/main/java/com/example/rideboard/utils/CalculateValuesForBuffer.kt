@@ -1,6 +1,10 @@
 package com.example.rideboard.utils
 
 import android.content.Context
+import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Handler
+import android.os.Looper
 import com.example.rideboard.AppSettings
 import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.buffer.GpsSample
@@ -28,6 +32,7 @@ val HRZ2 = AppSettings.hrZone2
 val HRZ3 = AppSettings.hrZone3
 val HRZ4 = AppSettings.hrZone4
 val HRZ5 = AppSettings.hrZone5
+val IS_RINGING = AppSettings.isRinging
 
 
 data class Coordinates(
@@ -175,6 +180,8 @@ data class AccuracyOfCoordinates(
                 }
             }
         }
+
+
         val previousGpsPointScreenValueString = previousGpsPoint.gpsPointScreenValueString?:"      "
         val actualPower =if (newGpsPoint.power != null || previousGpsPoint.power != null || latestGpsPoint.power != null) {
             ((newGpsPoint.power?:0) + (latestGpsPoint.power?:0) + (previousGpsPoint.power?:0))/((if(newGpsPoint.power != null) 1 else 0) + (if(latestGpsPoint.power != null) 1 else 0) + (if(previousGpsPoint.power != null) 1 else 0))
@@ -592,6 +599,7 @@ data class AccuracyOfCoordinates(
 if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latitude == latestGpsPoint.latitude
 && newGpsPoint.longitude == previousGpsPoint.longitude && latestGpsPoint.longitude == previousGpsPoint.longitude)
         || (previousSpeed < 0.2 && previousIsMoving)) { //return screenValuesWhenIsMovingBecomeWrong
+    if (IS_RINGING) {playDoubleBeep()}//sonnerie
         sample.gpsPointSpeed = 0.0
         sample.gpsPointAcceleration = 0.0
         sample.gpsPointVerticalSpeed = 0.0
@@ -894,6 +902,8 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
     bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
     bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
     previousDisplayedVerticalSpeed2/7.0 + newDisplayedVerticalSpeed2 /7.0
+
+        if (IS_RINGING && !previousIsMoving) {playSimpleBeep()}//sonnerie
 
     sample.gpsPointSpeed = newSpeed
     sample.gpsPointAcceleration = newAcceleration
@@ -1722,12 +1732,12 @@ fun calculateNewHorizontalDistanceDone (
             else 0.01
         }
         return try {
-            val ratioOfSpeed = max(0.0,(speed01+0.1)/(speed12+0.1)-2.5)
-            distanceDone * (1.0 + 0.075 * ratioOfSpeed*ratioOfSpeed/(ratioOfSpeed*ratioOfSpeed+4.0))//cette petite correction pour que les points calculés rattrapent le point gps brut
+            val ratioOfSpeed = max(0.0,(speed01+0.1)/(speed12+0.1)-2)
+            distanceDone * (1.0 + 0.2 * (ratioOfSpeed*ratioOfSpeed/(ratioOfSpeed*ratioOfSpeed+4.0)))//cette petite correction pour que les points calculés rattrapent le point gps brut
         }catch (e: Exception) {distanceDone}  // calculateDistanceBetweenTwoGpsPoints(previousValues.latitude?: newPoint.latitude, previousValues.longitude?: newPoint.longitude, newPoint.latitude, newPoint.longitude)
 
     }
-    val timeInterval = min ((newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0,(latestPoint.timestamp-newPoint.timestamp).toDouble()/1000.0)
+    val timeInterval = minOf (4.0,(newPoint.timestamp-oldPoint.timestamp).toDouble()/1000.0,(latestPoint.timestamp-newPoint.timestamp).toDouble()/1000.0)
     val distanceToNewPointProjectedOnNewDir =
         calculateDistanceToNewPointProjectedOnNewDir(newPoint, newDirection, previousDirection, previousLatitude, previousLongitude)
     return min (calculateDistanceDone(expectedDistance, maxExpectedDistance, minExpectedDistance,
@@ -2531,6 +2541,22 @@ fun simplifySampleAltitudeMns(sample: GpsSample, buffer: List<GpsSample>):Double
     return calculateAltitudeForSample(sample, buffer, 5000, 40000, 20000)
 }
 
-fun startNewScreenValues (buffer: List<GpsSample>){
+fun playDoubleBeep() {
+    val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+    val beepDuration = 150
+    val gapBetweenBeeps = 100
 
+    toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, beepDuration)
+    Handler(Looper.getMainLooper()).postDelayed({
+        toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, beepDuration)
+        Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, beepDuration + 50L)
+    }, (beepDuration + gapBetweenBeeps).toLong())
+}
+
+fun playSimpleBeep() {
+    val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+    val beepDuration = 150
+
+    toneGen.startTone(ToneGenerator.TONE_PROP_BEEP, beepDuration)
+    Handler(Looper.getMainLooper()).postDelayed({ toneGen.release() }, beepDuration + 100L)
 }

@@ -12,6 +12,7 @@ object AppSettings {
     var hrZone3 = 138
     var hrZone4 = 155
     var hrZone5 = 163
+    var isRinging = true
 
     private const val FILE_NAME = "settings.txt"
 
@@ -34,6 +35,7 @@ object AppSettings {
                 "hrZone3" -> hrZone3 = value
                 "hrZone4" -> hrZone4 = value
                 "hrZone5" -> hrZone5 = value
+                "isRinging" -> isRinging = value != 0
             }
         }
     }
@@ -49,6 +51,7 @@ object AppSettings {
             appendLine("hrZone3=$hrZone3")
             appendLine("hrZone4=$hrZone4")
             appendLine("hrZone5=$hrZone5")
+            appendLine("isRinging=${if (isRinging) 1 else 0}")
         }
         file.writeText(content)
     }
