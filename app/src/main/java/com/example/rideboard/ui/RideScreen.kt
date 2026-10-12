@@ -259,7 +259,7 @@ fun RideScreen(
                 isToggleBlocked = isToggleBlocked,
                 isRecording = isRecording,
                 onToggleGps = {
-                    if (isToggleBlocked) {} else {
+                    if (isToggleBlocked || isRecording) {} else {
                         val intent = Intent(context, LocationService::class.java)
                         isntOver = !isntOver
 
@@ -746,7 +746,7 @@ fun RideBottomBar(
                 modifier = Modifier.width(buttonSetValuesWidth),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) Color.Black else Color.Green
+                    containerColor = if (isRecording) Color.Black else Color.Cyan
                 )
             ) {
                 Text(
@@ -758,7 +758,11 @@ fun RideBottomBar(
             Button(
                 onClick = onToggleGps,
                 modifier = Modifier.width(buttonWidth),
-                contentPadding = PaddingValues(horizontal = 4.dp)
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isRecording || isToggleBlocked) Color.DarkGray else Color.Green
+                )
+
             ) {
                 Text(
                     text = if (isntOver) "Finir" else "Démarrer GPS",
@@ -773,7 +777,7 @@ fun RideBottomBar(
                 contentPadding = PaddingValues(0.dp),
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isToggleBlocked) Color.Red else Color.Green
+                    containerColor = if (isToggleBlocked) Color(0xFF991100) else Color.Yellow//Color(0xCC77CC00)
                 )
             ) { }
 
@@ -782,7 +786,7 @@ fun RideBottomBar(
                 modifier = Modifier.width(buttonWidth),
                 contentPadding = PaddingValues(horizontal = 4.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) Color.Red else Color.Green
+                    containerColor = if (isToggleBlocked) Color.DarkGray else if (isRecording) Color.Red else Color.Green
                 )
             ) {
                 Text(
@@ -796,7 +800,7 @@ fun RideBottomBar(
                 modifier = Modifier.width(buttonSetValuesWidth),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) Color.Black else Color.Green
+                    containerColor = if (isRecording) Color.Black else Color.Cyan
                 )
             ) {
                 Text(
