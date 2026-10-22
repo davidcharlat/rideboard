@@ -39,6 +39,7 @@ android {
 }
 
 dependencies {
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation("io.ktor:ktor-client-core:2.3.6")
     implementation("io.ktor:ktor-client-cio:2.3.6")       // moteur HTTP
     implementation("io.ktor:ktor-client-serialization:2.3.6")

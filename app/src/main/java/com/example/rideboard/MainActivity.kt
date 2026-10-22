@@ -17,7 +17,8 @@ import com.example.rideboard.altitude.database.AltitudeRepository
 import com.example.rideboard.altitude.providers.IgnProvider
 import com.example.rideboard.altitude.providers.LidarHdProvider
 import com.example.rideboard.altitude.providers.SrtmProvider
-import com.example.rideboard.buffer.GpsBuffer
+import com.example.rideboard.brouter.BRouterFiles
+import com.example.rideboard.brouter.CustomProfileStore
 import com.example.rideboard.config.AppConfig
 import com.example.rideboard.service.LocationService
 import com.example.rideboard.ui.RideScreen
@@ -40,6 +41,10 @@ class MainActivity : ComponentActivity() {
 
         //lecture des donnees de HRZ, PowerZone etc...
         AppSettings.load(applicationContext)
+        //copie des profils personnalisés
+        CustomProfileStore.load(applicationContext)
+        //lecture-copie des profiles BRouter
+        BRouterFiles.installProfiles(applicationContext)
         // --- Base de données
         val db = Room.databaseBuilder(
             applicationContext,

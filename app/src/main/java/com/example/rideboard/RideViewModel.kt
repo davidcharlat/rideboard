@@ -2,6 +2,7 @@ package com.example.rideboard
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
 import androidx.lifecycle.ViewModel
@@ -17,8 +18,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
+import com.example.rideboard.brouter.RoutePlanner
+import com.example.rideboard.brouter.SegmentDownloader
 import com.example.rideboard.config.AppConfig
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.osmdroid.util.GeoPoint
 import java.io.File
 
 class RideViewModel(application: Application) : AndroidViewModel(application) {
@@ -29,19 +34,202 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
     private val _trackPoints = mutableStateOf<List<Pair<Double, Double>>>(emptyList())
     val trackPoints: State<List<Pair<Double, Double>>> = _trackPoints
 
+    private var route: PlannedRoute? = null
+    private var routeStart = 0
+
+    private fun setRoute(points: List<GeoPoint>) {
+        route = PlannedRoute(points)
+        routeStart = 0
+        _plannedRoute.value = points
+    }
+
+    fun clearRoute() {
+        route = null
+        routeStart = 0
+        _plannedRoute.value = emptyList()
+    }
+
+    private fun updateRouteProgress(lat: Double, lon: Double) {
+        val r = route ?: return
+        val threshold = 30.0
+
+        // 1) recherche dans une fenêtre de 2 km de tracé devant la position atteinte
+        val nearEnd = r.indexAfter(routeStart, 2000.0)
+        var idx = r.findFirstWithin(lat, lon, routeStart, nearEnd, threshold)
+        // 2) sinon, recherche sur tout le reste du tracé
+        if (idx < 0) idx = r.findFirstWithin(lat, lon, nearEnd, r.points.size, threshold)
+
+        if (idx > routeStart) {
+            if (idx >= r.points.size - 1) {
+                clearRoute()   // arrivé
+            } else {
+                routeStart = idx
+                _plannedRoute.value = r.points.subList(idx, r.points.size).toList()
+            }
+        }
+    }
+
+
+    class PlannedRoute(val points: List<GeoPoint>) {
+
+        // cum[i] = longueur du tracé entre le point 0 et le point i, en mètres
+        private val cum = DoubleArray(points.size).also { c ->
+            for (i in 1 until points.size) {
+                c[i] = c[i - 1] + points[i - 1].distanceToAsDouble(points[i])
+            }
+        }
+
+        /** Premier indice dans [from, to) à moins de thresholdM de la position, ou -1. */
+        fun findFirstWithin(lat: Double, lon: Double, from: Int, to: Int, thresholdM: Double): Int {
+            val here = GeoPoint(lat, lon)
+            var i = from
+            while (i < to) {
+                val d = here.distanceToAsDouble(points[i])
+                if (d < thresholdM) return i
+                // Les points situés à moins de (d - thresholdM) mètres de tracé ne peuvent pas convenir
+                val target = cum[i] + (d - thresholdM)
+                var j = i + 1
+                while (j < to && cum[j] < target) j++
+                i = j
+            }
+            return -1
+        }
+
+        /** Premier indice (>= from) dont la longueur de tracé dépasse cum[from] + lengthM. */
+        fun indexAfter(from: Int, lengthM: Double): Int {
+            var j = from
+            while (j < points.size && cum[j] < cum[from] + lengthM) j++
+            return j
+        }
+    }
+
+    private val _plannedRoute = mutableStateOf<List<GeoPoint>>(emptyList())
+    val plannedRoute: State<List<GeoPoint>> = _plannedRoute
+
     init {
         loadTrackFromTsv()
         viewModelScope.launch {
             AppConfig.gpsUpdatesFlow.collect {
                 val newValues = calculateScreenValues(GpsBuffer)
                 _screenValues.value = newValues
-                
+
+                val lat = newValues.latitude
+                val lon = newValues.longitude
                 // On ajoute le nouveau point à la trace si les coordonnées sont valides
-                if (newValues.latitude != null && newValues.longitude != null) {
-                    _trackPoints.value = _trackPoints.value + Pair(newValues.latitude, newValues.longitude)
+                if (lat != null && lon != null) {
+                    _trackPoints.value += Pair(lat, lon)
+                    //et on efface la plannedRoute si besoin
+                    updateRouteProgress(lat, lon)
                 }
             }
         }
+    }
+    private val _routeVariants = mutableStateOf<List<List<GeoPoint>>>(emptyList())
+    val routeVariants: State<List<List<GeoPoint>>> = _routeVariants
+
+    private val _planning = mutableStateOf(false)
+    val planning: State<Boolean> = _planning
+
+    private val _planStatus = mutableStateOf("")
+    val planStatus: State<String> = _planStatus
+
+    private val _legs = mutableStateOf<List<List<GeoPoint>>>(emptyList())
+    val legs: State<List<List<GeoPoint>>> = _legs
+
+    private fun routeFile() = File(getApplication<Application>().filesDir, "brouter/route.tsv")
+
+    private suspend fun saveRoute(points: List<GeoPoint>) = withContext(Dispatchers.IO) {
+        val f = routeFile()
+        f.parentFile?.mkdirs()
+        val tmp = File(f.parentFile, "route.tsv.tmp")
+        tmp.bufferedWriter().use { w ->
+            points.forEach { w.write("${it.latitude}\t${it.longitude}\n") }
+        }
+        tmp.renameTo(f)
+    }
+
+    /** Recharge le parcours sauvegardé, comme s'il venait d'être calculé (effacement remis à zéro). */
+    fun loadSavedRoute(onMissing: () -> Unit) {
+        viewModelScope.launch {
+            val points = withContext(Dispatchers.IO) {
+                val f = routeFile()
+                if (!f.exists()) emptyList<GeoPoint>() else f.readLines().mapNotNull { line ->
+                    val p = line.split("\t")
+                    val lat = p.getOrNull(0)?.toDoubleOrNull()
+                    val lon = p.getOrNull(1)?.toDoubleOrNull()
+                    if (lat != null && lon != null) GeoPoint(lat, lon) else null
+                }
+            }
+            if (points.size >= 2) setRoute(points) else onMissing()
+        }
+    }
+
+    fun computeVariants(start: GeoPoint, end: GeoPoint, profile: String, profileParams: Map<String, String> = emptyMap()) {
+        if (_planning.value) return
+        viewModelScope.launch {
+            _planning.value = true
+            _routeVariants.value = emptyList()
+            try {
+                val app = getApplication<Application>()
+
+                val tiles = SegmentDownloader.tilesFor(start.latitude, start.longitude, end.latitude, end.longitude)
+                for (tile in tiles) {
+                    _planStatus.value = "Téléchargement de $tile…"
+                    if (!SegmentDownloader.download(app, tile)) {
+                        _planStatus.value = "Échec du téléchargement de $tile"
+                        return@launch
+                    }
+                }
+
+                val planner = RoutePlanner(app)
+                for (idx in 0..3) {
+                    _planStatus.value = "Calcul de l'itinéraire ${idx + 1}…"
+                    val result = planner.plan(start.latitude, start.longitude, end.latitude, end.longitude, profile, idx, profileParams)
+                    val points = result.getOrNull()
+                    if (points.isNullOrEmpty()) {
+                        Log.d("ROUTE", "variante $idx : ${result.exceptionOrNull()?.message}")
+                        if (idx == 0) {
+                            _planStatus.value = "Échec : ${result.exceptionOrNull()?.message ?: "aucun itinéraire"}"
+                            return@launch
+                        }
+                        break
+                    }
+                    if (_routeVariants.value.none { it == points }) {
+                        _routeVariants.value = _routeVariants.value + listOf(points)
+                    }
+                }
+                _planStatus.value = "${_routeVariants.value.size} itinéraire(s) trouvé(s)"
+            } finally {
+                _planning.value = false
+            }
+        }
+    }
+
+    fun commitVariant(index: Int) {
+        val leg = _routeVariants.value.getOrNull(index) ?: return
+        _legs.value = _legs.value + listOf(leg)
+        clearVariants()
+    }
+
+    fun clearPlan() {
+        _legs.value = emptyList()
+        clearVariants()
+    }
+
+
+    fun clearVariants() {
+        _routeVariants.value = emptyList()
+        _planStatus.value = ""
+    }
+
+    fun useVariant(index: Int) {
+        val all = _legs.value + listOfNotNull(_routeVariants.value.getOrNull(index))
+        if (all.isEmpty()) return
+        // on retire le premier point des tronçons suivants (il double le dernier du précédent)
+        val joined = all.flatMapIndexed { i, leg -> if (i == 0) leg else leg.drop(1) }
+        setRoute(joined)
+        viewModelScope.launch { saveRoute(joined) }   // voir le point 4
+        clearPlan()
     }
 
     fun loadTrackFromTsv() {
@@ -70,10 +258,18 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun currentPosition(): GeoPoint? {
+        val p = GpsBuffer.getLast() ?: return null
+        val lat = p.latitude
+        val lon = p.longitude
+        return GeoPoint(lat, lon)
+    }
+
     fun clearTrack() {
         _trackPoints.value = emptyList()
     }
 }
+
 
 /* ci dessous version du 18/10/25class
 

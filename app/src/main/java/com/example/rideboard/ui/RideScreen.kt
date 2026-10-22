@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.view.MotionEvent
 import android.view.View
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -72,6 +74,7 @@ import com.example.rideboard.utils.SensorType
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import com.example.rideboard.ui.views.HeartRateView
 import com.example.rideboard.ui.views.PowerView
 import com.example.rideboard.ui.views.VerticalSpeedView
@@ -86,6 +89,7 @@ fun RideScreen(
     rideViewModel: RideViewModel = viewModel()
 ) {
     val screenValues by rideViewModel.screenValues
+    val plannedRoute by rideViewModel.plannedRoute
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -226,10 +230,11 @@ fun RideScreen(
         return
     }
 
-
     if (setValuesScreen) {
         SetValuesScreen(
-            onDone = { setValuesScreen = false }
+            onDone = { setValuesScreen = false },
+            rideViewModel = rideViewModel,
+            currentPosition = rideViewModel.currentPosition()
         )
         return
     }
@@ -313,11 +318,17 @@ fun RideScreen(
             modifier = Modifier.padding(padding),
             screenValues = screenValues,
             trackPoints = rideViewModel.trackPoints.value,
+            plannedRoute = plannedRoute,
             isToggleBlocked = isToggleBlocked,
             isRecording = isRecording,
             onConnectSensor = { type ->
                 pendingSensorType = type
                 permissionLauncher.launch(bluetoothPermissions)
+            },
+            onNavClick = {
+                rideViewModel.loadSavedRoute {
+                    Toast.makeText(context, "Aucun parcours enregistré", Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }
@@ -328,14 +339,13 @@ fun RideContent(
     modifier: Modifier,
     screenValues: ScreenValues,
     trackPoints: List<Pair<Double, Double>>,
+    plannedRoute: List<GeoPoint>,
     isToggleBlocked: Boolean,
     isRecording: Boolean,
-    onConnectSensor: (SensorType) -> Unit
+    onConnectSensor: (SensorType) -> Unit,
+    onNavClick: () -> Unit
 ) {
-    var currentTime by remember {
-        mutableLongStateOf(System.currentTimeMillis())
-    }
-
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var zoomedCard by remember { mutableStateOf<String?>(null) }
     var showTrace by remember { mutableStateOf(false) }
 
@@ -378,6 +388,7 @@ fun RideContent(
                     longitude = screenValues.longitude ?: 0.0,
                     direction = screenValues.direction ?: (3.1416 / 2.0),
                     trackPoints = trackPoints,
+                    plannedRoute = plannedRoute,
                     showTrace = showTrace,
                     onToggleTrace = { showTrace = !showTrace },
                     isToggleBlocked = isToggleBlocked,
@@ -385,7 +396,9 @@ fun RideContent(
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .height(maxHeight) // toute la zone 1.12f, donc déborde sous la barre capteurs
-                        .border(1.dp, Color.DarkGray)
+                        .border(1.dp, Color.DarkGray),
+                    bottomInset = sensorBarHeight,
+                    onNavClick = onNavClick
                 )
             } else {
                 Box(
@@ -749,11 +762,14 @@ fun RideBottomBar(
                     containerColor = if (isRecording) Color.Black else Color.Cyan
                 )
             ) {
-                Text(
-                    text = if (isRecording) " " else "S",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (!isRecording) {
+                    Icon(
+                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                        contentDescription = "Points",
+                        tint = Color.Black,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
             Button(
                 onClick = onToggleGps,
@@ -819,10 +835,13 @@ fun MapScreen(
     longitude: Double,
     direction: Double, // -pi..pi, 0=est, pi/2=nord
     trackPoints: List<Pair<Double, Double>>,
+    plannedRoute: List<GeoPoint>,
     showTrace: Boolean,
     onToggleTrace: () -> Unit,
     isToggleBlocked: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
+    onNavClick: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -855,6 +874,13 @@ fun MapScreen(
         }
     }
 
+    val routePolyline = remember {
+        Polyline(mapView).apply {
+            outlinePaint.color = android.graphics.Color.RED
+            outlinePaint.strokeWidth = 12f
+        }
+    }
+
     DisposableEffect(mapView, positionMarker) {
         mapView.overlays.add(positionMarker)
         onDispose { mapView.overlays.remove(positionMarker) }
@@ -872,6 +898,16 @@ fun MapScreen(
         if (autoRecenter) {
             mapView.controller.setCenter(GeoPoint(latitude, longitude))
         }
+    }
+
+    DisposableEffect(mapView, routePolyline) {
+        mapView.overlays.add(0, routePolyline)   // en dessous du marqueur de position
+        onDispose { mapView.overlays.remove(routePolyline) }
+    }
+
+    LaunchedEffect(plannedRoute) {
+        routePolyline.setPoints(plannedRoute)
+        mapView.invalidate()
     }
 
     LaunchedEffect(trackPoints, showTrace) {
@@ -912,6 +948,7 @@ fun MapScreen(
 
         Column(
             modifier = Modifier
+                .fillMaxHeight()
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
         ) {
@@ -927,12 +964,23 @@ fun MapScreen(
                 onClick = onToggleTrace,
                 modifier = Modifier.background(if (showTrace) Color.Blue.copy(alpha = 0.5f) else Color.Transparent, CircleShape)
             ) {
-                Text(
-                    text = "S", 
-                    color = if (showTrace) Color.White else Color.Gray,
-                    fontWeight = FontWeight.Bold
+                Icon(
+                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                    contentDescription = "Trace",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp)
                 )
             }
+
+            //bouton pour la navigation sur un itinéraire
+            IconButton(
+                onClick = { if (!isToggleBlocked) onNavClick() },
+                modifier = Modifier
+                    .background(Color.Transparent)
+                    .align(Alignment.End)
+                    .padding(end = 8.dp, bottom = bottomInset + 8.dp),
+                //à utiliser si Button au lieu de IconButton:  contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
+            ) { Text("Nav") }
         }
 
         if (!autoRecenter) {
@@ -961,41 +1009,78 @@ fun SensorView(
     onSensorClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isExpanded by remember { mutableStateOf(false) }
     val sensorManager = AppConfig.sensorManager
-    Row(
+
+    Box(
         modifier = modifier,
-        horizontalArrangement = Arrangement.SpaceAround,
-        verticalAlignment = Alignment.CenterVertically
+        contentAlignment = Alignment.CenterEnd
     ) {
-        val hrStatus = sensorManager?.sensorStatuses?.get(SensorType.HEART_RATE) ?: SensorConnectionStatus.DISCONNECTED
-        SensorItem(
-            modifier = Modifier.weight(1f),
-            icon = "\u2665",
-            value = screenValues.correctedHeartRate?.toString(),
-            status = hrStatus,
-            onConnect = { onConnectClick(SensorType.HEART_RATE) },
-            onClick = { onSensorClick("heartRate") }
-        )
-        
-        val pwrStatus = sensorManager?.sensorStatuses?.get(SensorType.POWER) ?: SensorConnectionStatus.DISCONNECTED
-        SensorItem(
-            modifier = Modifier.weight(1f),
-            icon = "\u26A1",
-            value = screenValues.power?.toString(),
-            status = pwrStatus,
-            onConnect = { onConnectClick(SensorType.POWER) },
-            onClick = { onSensorClick("power") }
-        )
-        
-        val cadStatus = sensorManager?.sensorStatuses?.get(SensorType.CADENCE) ?: SensorConnectionStatus.DISCONNECTED
-        SensorItem(
-            modifier = Modifier.weight(1f),
-            icon = "\u21BB",
-            value = screenValues.cadence?.toString(),
-            status = cadStatus,
-            onConnect = { onConnectClick(SensorType.CADENCE) },
-            onClick = { onSensorClick("cadence") }
-        )
+        if (!isExpanded) {
+            IconButton(
+                onClick = { isExpanded = true },
+                modifier = Modifier.fillMaxHeight()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Afficher les capteurs",
+                    tint = Color.White
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val hrStatus = sensorManager?.sensorStatuses?.get(SensorType.HEART_RATE) ?: SensorConnectionStatus.DISCONNECTED
+                    SensorItem(
+                        modifier = Modifier.weight(1f),
+                        icon = "\u2665",
+                        value = screenValues.correctedHeartRate?.toString(),
+                        status = hrStatus,
+                        onConnect = { onConnectClick(SensorType.HEART_RATE) },
+                        onClick = { onSensorClick("heartRate") }
+                    )
+                    
+                    val pwrStatus = sensorManager?.sensorStatuses?.get(SensorType.POWER) ?: SensorConnectionStatus.DISCONNECTED
+                    SensorItem(
+                        modifier = Modifier.weight(1f),
+                        icon = "\u26A1",
+                        value = screenValues.power?.toString(),
+                        status = pwrStatus,
+                        onConnect = { onConnectClick(SensorType.POWER) },
+                        onClick = { onSensorClick("power") }
+                    )
+                    
+                    val cadStatus = sensorManager?.sensorStatuses?.get(SensorType.CADENCE) ?: SensorConnectionStatus.DISCONNECTED
+                    SensorItem(
+                        modifier = Modifier.weight(1f),
+                        icon = "\u21BB",
+                        value = screenValues.cadence?.toString(),
+                        status = cadStatus,
+                        onConnect = { onConnectClick(SensorType.CADENCE) },
+                        onClick = { onSensorClick("cadence") }
+                    )
+                }
+
+                IconButton(
+                    onClick = { isExpanded = false },
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = "Masquer les capteurs",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
     }
 }
 

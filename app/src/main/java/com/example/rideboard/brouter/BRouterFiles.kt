@@ -1,4 +1,4 @@
-package com.example.rideboard
+package com.example.rideboard.brouter
 
 import android.content.Context
 import java.io.File
@@ -14,10 +14,8 @@ object BRouterFiles {
         segmentsDir(context).mkdirs()
         context.assets.list("brouter_profiles")?.forEach { name ->
             val out = File(dir, name)
-            if (!out.exists()) {
-                context.assets.open("brouter_profiles/$name").use { input ->
-                    out.outputStream().use { input.copyTo(it) }
-                }
+            context.assets.open("brouter_profiles/$name").use { input ->
+                out.outputStream().use { input.copyTo(it) }
             }
         }
     }

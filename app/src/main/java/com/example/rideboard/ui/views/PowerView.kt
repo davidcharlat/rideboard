@@ -153,7 +153,7 @@ fun PowerView(
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
                         val textToPrint1 = "Sprt: %.0f".format(screenValues.screenPower4)
-                        val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower4)
+                        val textToPrint2 = " /%.0f".format(screenValues.maxScreenPower4)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
@@ -222,7 +222,7 @@ fun PowerView(
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
                         val textToPrint1 = "Rstc: %.0f".format(screenValues.screenPower15)
-                        val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower15)
+                        val textToPrint2 = " /%.0f".format(screenValues.maxScreenPower15)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
@@ -291,7 +291,7 @@ fun PowerView(
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
                         val textToPrint1 = "Vo2:  %.0f".format(screenValues.screenPower125)
-                        val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower125)
+                        val textToPrint2 = " /%.0f".format(screenValues.maxScreenPower125)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
@@ -360,7 +360,7 @@ fun PowerView(
                         val maxValueFont =
                             with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
                         val textToPrint1 = "ftp:   %.0f".format(screenValues.screenPower1000)
-                        val textToPrint2 = "  / %.0f ".format(screenValues.maxScreenPower1000)
+                        val textToPrint2 = " /%.0f".format(screenValues.maxScreenPower1000)
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
