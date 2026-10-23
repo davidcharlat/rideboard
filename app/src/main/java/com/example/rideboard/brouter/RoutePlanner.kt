@@ -19,7 +19,7 @@ class RoutePlanner(private val context: Context) {
         profileName: String,
         alternativeIdx: Int = 0,
         profileParams: Map<String, String> = emptyMap()
-    ): Result<List<GeoPoint>> = withContext(Dispatchers.Default) {
+    ): Result<Pair<List<GeoPoint>, Int?>> = withContext(Dispatchers.Default) {
         try {
             val profileFile = File(BRouterFiles.profilesDir(context), "$profileName.brf")
             val segmentDir = BRouterFiles.segmentsDir(context)
@@ -59,15 +59,23 @@ class RoutePlanner(private val context: Context) {
             val gpx = FormatGpx(rc).format(track)
             Log.d("ROUTE", gpx.lineSequence().drop(1).firstOrNull() ?: "")
 
+            val tagRegex = Regex("<trkpt([^>]*)>(?:\\s*<ele>([^<]*)</ele>)?")
             val latRegex = Regex("lat=\"([^\"]+)\"")
             val lonRegex = Regex("lon=\"([^\"]+)\"")
-            val points = Regex("<trkpt[^>]*>").findAll(gpx).mapNotNull { m ->
-                val lat = latRegex.find(m.value)?.groupValues?.get(1)?.toDoubleOrNull()
-                val lon = lonRegex.find(m.value)?.groupValues?.get(1)?.toDoubleOrNull()
-                if (lat != null && lon != null) GeoPoint(lat, lon) else null
-            }.toList()
 
-            Result.success(points)
+            var lastEle = 0.0
+            val points = tagRegex.findAll(gpx).mapNotNull { m ->
+                val attrs = m.groupValues[1]
+                val lat = latRegex.find(attrs)?.groupValues?.get(1)?.toDoubleOrNull()
+                val lon = lonRegex.find(attrs)?.groupValues?.get(1)?.toDoubleOrNull()
+                if (lat == null || lon == null) return@mapNotNull null
+                val ele = m.groupValues[2].toDoubleOrNull() ?: lastEle   // altitude absente : on reprend la précédente
+                lastEle = ele
+                GeoPoint(lat, lon, ele)
+            }.toList()
+            val seconds = parseDurationSeconds(gpx)
+            Log.d("ROUTE", "durée du modèle = $seconds s")
+            Result.success(points to seconds)
         } catch (e: Throwable) {
             Log.e("ROUTE_TEST", "Exception", e)
             Result.failure(e)
@@ -75,3 +83,13 @@ class RoutePlanner(private val context: Context) {
     }
 }
 
+
+private fun parseDurationSeconds(gpx: String): Int? {
+    val header = gpx.lineSequence().firstOrNull { "track-length" in it } ?: return null
+    val m = Regex("""time=(?:(\d+)h)?\s*(?:(\d+)m)?\s*(?:(\d+)s)?""").find(header) ?: return null
+    val h = m.groupValues[1].toIntOrNull()
+    val mi = m.groupValues[2].toIntOrNull()
+    val s = m.groupValues[3].toIntOrNull()
+    if (h == null && mi == null && s == null) return null
+    return (h ?: 0) * 3600 + (mi ?: 0) * 60 + (s ?: 0)
+}

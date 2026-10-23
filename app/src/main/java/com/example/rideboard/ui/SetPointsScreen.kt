@@ -41,7 +41,7 @@ import java.io.File
 import java.util.Locale
 
 private enum class ScreenMode {
-    MAIN, DELETE, ADD
+    MAIN, DELETE, ADD, PLAN
 }
 
 private enum class AddStep {
@@ -78,7 +78,8 @@ fun SetPointsScreen(
     val coroutineScope = rememberCoroutineScope()
     val trackPoints by rideViewModel.trackPoints
 
-    var screenMode by remember { mutableStateOf(ScreenMode.MAIN) }
+    val isRecording = AppConfig.isRecording
+    var screenMode by remember { mutableStateOf(if (isRecording) ScreenMode.PLAN else ScreenMode.MAIN) }
 
     // --- Variables pour le mode Suppression ---
     var deleteStartIndex by remember { mutableStateOf<Int?>(null) }
@@ -102,9 +103,6 @@ fun SetPointsScreen(
     var showAddConfirmDialog by remember { mutableStateOf(false) }
 
     var isProcessing by remember { mutableStateOf(false) }
-
-    // --- Recharger les données de la trace depuis le tsv pour que les lignes concordent---
-    rideViewModel.loadTrackFromTsv()
 
     // Charger les données détaillées du TSV lorsque l'on rentre en mode Ajout
     LaunchedEffect(screenMode) {
@@ -339,7 +337,7 @@ fun SetPointsScreen(
 
         AlertDialog(
             onDismissRequest = { showSpeedPromptDialog = false },
-            containerColor = Color(0xFF222222).copy(alpha = 0.7f),
+            containerColor = Color(0xFF222222).copy(alpha = 0.88f),
             title = { Text("Nouveau point (${if (isAddingBefore) "AVANT" else "APRÈS"})", color = Color.White) },
             text = {
                 Column {
@@ -601,18 +599,31 @@ fun SetPointsScreen(
                         verticalArrangement = Arrangement.Center,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        Button(
+                            onClick = { screenMode = ScreenMode.PLAN },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                        ) {
+                            Text("Planifier itinéraire", color = Color.White, fontSize = 18.sp)
+                        }
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
                         Text(
                             text = "Gestion des points de trace",
                             color = Color.White,
-                            fontSize = 22.sp,
+                            fontSize = 20.sp,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(32.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = { screenMode = ScreenMode.ADD },
+                            enabled = !isRecording,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp),
@@ -625,6 +636,7 @@ fun SetPointsScreen(
 
                         Button(
                             onClick = { screenMode = ScreenMode.DELETE },
+                            enabled = !isRecording,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp),
@@ -646,6 +658,21 @@ fun SetPointsScreen(
                         }
                     }
                 }
+            }
+
+            ScreenMode.PLAN -> {
+                PlanRoutePage(
+                    rideViewModel = rideViewModel,
+                    currentPosition = { rideViewModel.currentPosition() },
+                    onBack = {
+                        if (isRecording) {
+                            onDone()
+                        } else {
+                            screenMode = ScreenMode.MAIN
+                        }
+                    },
+                    onValidated = onDone
+                )
             }
 
             ScreenMode.DELETE -> {

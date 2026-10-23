@@ -1,6 +1,7 @@
 package com.example.rideboard.ui
 
 import android.Manifest
+import android.R.attr.maxWidth
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
@@ -15,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -114,6 +116,7 @@ fun RideScreen(
             }
         }
     }
+    val routeRemaining by rideViewModel.routeRemaining
 
     var isntOver by remember { mutableStateOf(true) }
     var isRecording by remember { mutableStateOf(AppConfig.isRecording) }
@@ -293,7 +296,7 @@ fun RideScreen(
                    // AppConfig.isToggleBlocked = !AppConfig.isToggleBlocked
                 },
                 onTogglePoints = {
-                    if (!isToggleBlocked && !isRecording) setPointsScreen = true
+                    if (!isToggleBlocked) setPointsScreen = true
                 },
                 onToggleSettings = {
                     if (!isToggleBlocked && !isRecording) setValuesScreen = true
@@ -315,6 +318,7 @@ fun RideScreen(
     ) { padding ->
 
         RideContent(
+            routeRemaining = routeRemaining,
             modifier = Modifier.padding(padding),
             screenValues = screenValues,
             trackPoints = rideViewModel.trackPoints.value,
@@ -326,7 +330,7 @@ fun RideScreen(
                 permissionLauncher.launch(bluetoothPermissions)
             },
             onNavClick = {
-                rideViewModel.loadSavedRoute {
+                rideViewModel.toggleNav {
                     Toast.makeText(context, "Aucun parcours enregistré", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -336,6 +340,7 @@ fun RideScreen(
 
 @Composable
 fun RideContent(
+    routeRemaining: RideViewModel.RouteRemaining?,
     modifier: Modifier,
     screenValues: ScreenValues,
     trackPoints: List<Pair<Double, Double>>,
@@ -398,7 +403,8 @@ fun RideContent(
                         .height(maxHeight) // toute la zone 1.12f, donc déborde sous la barre capteurs
                         .border(1.dp, Color.DarkGray),
                     bottomInset = sensorBarHeight,
-                    onNavClick = onNavClick
+                    onNavClick = onNavClick,
+                    routeRemaining = routeRemaining
                 )
             } else {
                 Box(
@@ -759,17 +765,15 @@ fun RideBottomBar(
                 modifier = Modifier.width(buttonSetValuesWidth),
                 contentPadding = PaddingValues(0.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) Color.Black else Color.Cyan
+                    containerColor = if (isToggleBlocked) Color.Black else if (isRecording) Color.DarkGray else Color.Cyan
                 )
             ) {
-                if (!isRecording) {
-                    Icon(
-                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                        contentDescription = "Points",
-                        tint = Color.Black,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                Icon(
+                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                    contentDescription = "Route",
+                    tint = Color.Black,
+                    modifier = Modifier.size(24.dp)
+                )
             }
             Button(
                 onClick = onToggleGps,
@@ -841,10 +845,12 @@ fun MapScreen(
     isToggleBlocked: Boolean,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
-    onNavClick: () -> Unit = {}
+    onNavClick: () -> Unit = {},
+    routeRemaining: RideViewModel.RouteRemaining? = null
 ) {
+    val textMeasurer = rememberTextMeasurer()
     val context = LocalContext.current
-
+    val isNavShown = plannedRoute.isNotEmpty()
     val mapView = remember {
                 MapView(context).apply {
                     setTileSource(TileSourceFactory.OpenTopo)  //MAPNIK
@@ -946,6 +952,28 @@ fun MapScreen(
             factory = { mapView }
         )
 
+        routeRemaining?.let { r ->
+            val text = formatRemaining(r)
+            val widthPerValuePx = maxWidth.toFloat() / max(1, text.length)
+            val font = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(text, "    "),
+                availableWidthPx = widthPerValuePx,
+                maxFontSize = 30.sp,
+                minFontSize = 6.sp
+            )
+            Text(
+                text = text,
+                color = Color.White,
+                fontSize = font,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = bottomInset + 8.dp)
+                    .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -962,7 +990,7 @@ fun MapScreen(
             // Bouton de trace
             IconButton(
                 onClick = onToggleTrace,
-                modifier = Modifier.background(if (showTrace) Color.Blue.copy(alpha = 0.5f) else Color.Transparent, CircleShape)
+                modifier = Modifier.background(if (showTrace) Color.Blue.copy(alpha = 0.3f) else Color.Transparent, CircleShape)
             ) {
                 Icon(
                     painter = painterResource(id = R.mipmap.ic_launcher_foreground),
@@ -976,9 +1004,9 @@ fun MapScreen(
             IconButton(
                 onClick = { if (!isToggleBlocked) onNavClick() },
                 modifier = Modifier
-                    .background(Color.Transparent)
+                    .background(if (isNavShown) Color.Red.copy(alpha = 0.3f) else Color.Transparent, CircleShape)
                     .align(Alignment.End)
-                    .padding(end = 8.dp, bottom = bottomInset + 8.dp),
+                    //.padding(end = 8.dp, bottom = 8.dp),
                 //à utiliser si Button au lieu de IconButton:  contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
             ) { Text("Nav") }
         }
@@ -994,6 +1022,12 @@ fun MapScreen(
             }
         }
     }
+}
+
+fun formatRemaining(r: RideViewModel.RouteRemaining): String {
+    val km = r.meters / 1000.0
+    val dist = if (km >= 100) "%.0f km".format(km) else "%.1f km".format(km)
+    return "$dist · D+ ${Math.round(r.ascentM)} m"
 }
 
 fun mathAngleToCompassBearing(angleRad: Double): Float {

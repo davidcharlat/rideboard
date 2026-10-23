@@ -37,16 +37,31 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
     private var route: PlannedRoute? = null
     private var routeStart = 0
 
+    data class RouteRemaining(val meters: Double, val ascentM: Double)
+
+    private val ASCENT_THRESHOLD_M = 0.0
+
+    private val _routeRemaining = mutableStateOf<RouteRemaining?>(null)
+    val routeRemaining: State<RouteRemaining?> = _routeRemaining
+
+    private fun publishRemaining() {
+        val r = route
+        _routeRemaining.value =
+            if (r == null) null else RouteRemaining(r.remainingMeters(routeStart), r.remainingAscent(routeStart))
+    }
+
     private fun setRoute(points: List<GeoPoint>) {
-        route = PlannedRoute(points)
+        route = PlannedRoute(points, ASCENT_THRESHOLD_M)
         routeStart = 0
         _plannedRoute.value = points
+        publishRemaining()
     }
 
     fun clearRoute() {
         route = null
         routeStart = 0
         _plannedRoute.value = emptyList()
+        publishRemaining()
     }
 
     private fun updateRouteProgress(lat: Double, lon: Double) {
@@ -65,28 +80,41 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 routeStart = idx
                 _plannedRoute.value = r.points.subList(idx, r.points.size).toList()
+                publishRemaining()
             }
         }
     }
 
 
-    class PlannedRoute(val points: List<GeoPoint>) {
+    class PlannedRoute(val points: List<GeoPoint>, ascentThresholdM: Double = 0.0) {
 
-        // cum[i] = longueur du tracé entre le point 0 et le point i, en mètres
-        private val cum = DoubleArray(points.size).also { c ->
+        private val cum = DoubleArray(points.size)      // distance cumulée depuis le point 0 (m)
+        private val ascent = DoubleArray(points.size)   // D+ cumulé depuis le point 0 (m)
+
+        init {
+            var ref = points.firstOrNull()?.altitude ?: 0.0
             for (i in 1 until points.size) {
-                c[i] = c[i - 1] + points[i - 1].distanceToAsDouble(points[i])
+                cum[i] = cum[i - 1] + points[i - 1].distanceToAsDouble(points[i])
+                ascent[i] = ascent[i - 1]
+                val d = points[i].altitude - ref
+                if (d > 0 && d >= ascentThresholdM) {
+                    ascent[i] += d
+                    ref = points[i].altitude
+                } else if (d < 0 && -d >= ascentThresholdM) {
+                    ref = points[i].altitude
+                }
             }
         }
 
-        /** Premier indice dans [from, to) à moins de thresholdM de la position, ou -1. */
+        fun remainingMeters(from: Int): Double = if (points.isEmpty()) 0.0 else cum.last() - cum[from]
+        fun remainingAscent(from: Int): Double = if (points.isEmpty()) 0.0 else ascent.last() - ascent[from]
+
         fun findFirstWithin(lat: Double, lon: Double, from: Int, to: Int, thresholdM: Double): Int {
             val here = GeoPoint(lat, lon)
             var i = from
             while (i < to) {
                 val d = here.distanceToAsDouble(points[i])
                 if (d < thresholdM) return i
-                // Les points situés à moins de (d - thresholdM) mètres de tracé ne peuvent pas convenir
                 val target = cum[i] + (d - thresholdM)
                 var j = i + 1
                 while (j < to && cum[j] < target) j++
@@ -95,7 +123,6 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
             return -1
         }
 
-        /** Premier indice (>= from) dont la longueur de tracé dépasse cum[from] + lengthM. */
         fun indexAfter(from: Int, lengthM: Double): Int {
             var j = from
             while (j < points.size && cum[j] < cum[from] + lengthM) j++
@@ -136,6 +163,12 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
     private val _legs = mutableStateOf<List<List<GeoPoint>>>(emptyList())
     val legs: State<List<List<GeoPoint>>> = _legs
 
+    private val _routeDurations = mutableStateOf<List<Int?>>(emptyList())
+    val routeDurations: State<List<Int?>> = _routeDurations
+
+    private val _legDurations = mutableStateOf<List<Int?>>(emptyList())
+    val legDurations: State<List<Int?>> = _legDurations
+
     private fun routeFile() = File(getApplication<Application>().filesDir, "brouter/route.tsv")
 
     private suspend fun saveRoute(points: List<GeoPoint>) = withContext(Dispatchers.IO) {
@@ -143,7 +176,7 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         f.parentFile?.mkdirs()
         val tmp = File(f.parentFile, "route.tsv.tmp")
         tmp.bufferedWriter().use { w ->
-            points.forEach { w.write("${it.latitude}\t${it.longitude}\n") }
+            points.forEach { w.write("${it.latitude}\t${it.longitude}\t${it.altitude}\n") }
         }
         tmp.renameTo(f)
     }
@@ -157,7 +190,8 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
                     val p = line.split("\t")
                     val lat = p.getOrNull(0)?.toDoubleOrNull()
                     val lon = p.getOrNull(1)?.toDoubleOrNull()
-                    if (lat != null && lon != null) GeoPoint(lat, lon) else null
+                    val ele = p.getOrNull(2)?.toDoubleOrNull() ?: 0.0
+                    if (lat != null && lon != null) GeoPoint(lat, lon, ele) else null
                 }
             }
             if (points.size >= 2) setRoute(points) else onMissing()
@@ -169,6 +203,7 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _planning.value = true
             _routeVariants.value = emptyList()
+            _routeDurations.value = emptyList()
             try {
                 val app = getApplication<Application>()
 
@@ -185,8 +220,8 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
                 for (idx in 0..3) {
                     _planStatus.value = "Calcul de l'itinéraire ${idx + 1}…"
                     val result = planner.plan(start.latitude, start.longitude, end.latitude, end.longitude, profile, idx, profileParams)
-                    val points = result.getOrNull()
-                    if (points.isNullOrEmpty()) {
+                    val pair = result.getOrNull()
+                    if (pair == null || pair.first.isEmpty()) {
                         Log.d("ROUTE", "variante $idx : ${result.exceptionOrNull()?.message}")
                         if (idx == 0) {
                             _planStatus.value = "Échec : ${result.exceptionOrNull()?.message ?: "aucun itinéraire"}"
@@ -194,8 +229,10 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         break
                     }
+                    val (points, seconds) = pair
                     if (_routeVariants.value.none { it == points }) {
                         _routeVariants.value = _routeVariants.value + listOf(points)
+                        _routeDurations.value = _routeDurations.value + listOf(seconds)
                     }
                 }
                 _planStatus.value = "${_routeVariants.value.size} itinéraire(s) trouvé(s)"
@@ -205,21 +242,23 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun clearVariants() {
+        _routeVariants.value = emptyList()
+        _routeDurations.value = emptyList()
+        _planStatus.value = ""
+    }
+
     fun commitVariant(index: Int) {
         val leg = _routeVariants.value.getOrNull(index) ?: return
         _legs.value = _legs.value + listOf(leg)
+        _legDurations.value = _legDurations.value + listOf(_routeDurations.value.getOrNull(index))
         clearVariants()
     }
 
     fun clearPlan() {
         _legs.value = emptyList()
+        _legDurations.value = emptyList()
         clearVariants()
-    }
-
-
-    fun clearVariants() {
-        _routeVariants.value = emptyList()
-        _planStatus.value = ""
     }
 
     fun useVariant(index: Int) {
@@ -230,6 +269,10 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         setRoute(joined)
         viewModelScope.launch { saveRoute(joined) }   // voir le point 4
         clearPlan()
+    }
+
+    fun toggleNav(onMissing: () -> Unit) {
+        if (_plannedRoute.value.isNotEmpty()) clearRoute() else loadSavedRoute(onMissing)
     }
 
     fun loadTrackFromTsv() {
@@ -269,161 +312,3 @@ class RideViewModel(application: Application) : AndroidViewModel(application) {
         _trackPoints.value = emptyList()
     }
 }
-
-
-/* ci dessous version du 18/10/25class
-
-RideViewModel : ViewModel() {
-
-    init {
-        viewModelScope.launch {
-            AppEvents.gpsSamplesFlow.collect { sample ->
-                onNewSample(sample)
-            }
-        }
-    }
-    private val _currentSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val currentSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _currentSpeedScreen
-
-    private val _maxSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val maxSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _maxSpeedScreen
-
-    private val _averageSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val averageSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _averageSpeedScreen
-
-    private val _currentDistanceScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val currentDistanceScreen: androidx.lifecycle.LiveData<Double> get() = _currentDistanceScreen
-
-    private val _currentAltitudeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val currentAltitudeScreen: androidx.lifecycle.LiveData<Double> get() = _currentAltitudeScreen
-
-    private val _maxAltitudeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val maxAltitudeScreen: androidx.lifecycle.LiveData<Double> get() = _maxAltitudeScreen
-
-    private val _minAltitudeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val minAltitudeScreen: androidx.lifecycle.LiveData<Double> get() = _minAltitudeScreen
-
-    private val _travelTimeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val travelTimeScreen: androidx.lifecycle.LiveData<Double> get() = _travelTimeScreen
-
-    private val _cumulativeElevationGainScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val cumulativeElevationGainScreen: androidx.lifecycle.LiveData<Double> get() = _cumulativeElevationGainScreen
-
-    private val _currentVerticalSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val currentVerticalSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _currentVerticalSpeedScreen
-
-    private val _maxVerticalSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val maxVerticalSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _maxVerticalSpeedScreen
-
-    private val _minVerticalSpeedScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val minVerticalSpeedScreen: androidx.lifecycle.LiveData<Double> get() = _minVerticalSpeedScreen
-
-    private val _currentSlopeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val currentSlopeScreen: androidx.lifecycle.LiveData<Double> get() = _currentSlopeScreen
-
-    private val _maxSlopeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val maxSlopeScreen: androidx.lifecycle.LiveData<Double> get() = _maxSlopeScreen
-
-    private val _minSlopeScreen = androidx.lifecycle.MutableLiveData<Double>()
-    val minSlopeScreen: androidx.lifecycle.LiveData<Double> get() = _minSlopeScreen
-
-    fun updateCurrentSpeedScreen(newSpeed: Double) {
-        _currentSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateMaxSpeedScreen(newSpeed: Double) {
-        _maxSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateAverageSpeedScreen(newSpeed: Double) {
-        _averageSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateCurrentDistanceScreen(newDistance: Double) {
-        _currentDistanceScreen.postValue(newDistance)
-    }
-
-    fun updateCurrentAltitudeScreen(newAltitude: Double) {
-        _currentAltitudeScreen.postValue(newAltitude)
-    }
-
-    fun updateMaxAltitudeScreen(newAltitude: Double) {
-        _maxAltitudeScreen.postValue(newAltitude)
-    }
-
-    fun updateMinAltitudeScreen(newAltitude: Double) {
-        _minAltitudeScreen.postValue(newAltitude)
-    }
-
-    fun updateTravelTimeScreen(newTime: Double) {
-        _travelTimeScreen.postValue(newTime)
-    }
-
-    fun updateCumulativeElevationGainScreen(newGain: Double) {
-        _cumulativeElevationGainScreen.postValue(newGain)
-    }
-
-    fun updateCurrentVerticalSpeedScreen(newSpeed: Double) {
-        _currentVerticalSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateMaxVerticalSpeedScreen(newSpeed: Double) {
-        _maxVerticalSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateMinVerticalSpeedScreen(newSpeed: Double) {
-        _minVerticalSpeedScreen.postValue(newSpeed)
-    }
-
-    fun updateCurrentSlopeScreen(newSlope: Double) {
-        _currentSlopeScreen.postValue(newSlope)
-    }
-
-    fun updateMaxSlopeScreen(newSlope: Double) {
-        _maxSlopeScreen.postValue(newSlope)
-    }
-
-    fun updateMinSlopeScreen(newSlope: Double) {
-        _minSlopeScreen.postValue(newSlope)
-    }
-
-    fun onNewSample(sample: GpsSample) {
-        viewModelScope.launch(Dispatchers.Default) {
-            // Vitesse
-            calculateCurrentSpeedScreen(GpsBuffer)?.let { updateCurrentSpeedScreen(it) }
-            calculateMaxSpeedScreen(GpsBuffer)?.let { updateMaxSpeedScreen(it) }
-            calculateAverageSpeedScreen(GpsBuffer)?.let { updateAverageSpeedScreen(it) }
-
-            // Distance
-            calculateCurrentDistanceScreen(GpsBuffer)?.let { updateCurrentDistanceScreen(it) }
-
-            // Altitude
-            calculateCurrentAltitudeScreen(GpsBuffer)?.let { updateCurrentAltitudeScreen(it) }
-            calculateMaxAltitudeScreen(GpsBuffer)?.let { updateMaxAltitudeScreen(it) }
-            calculateMinAltitudeScreen(GpsBuffer)?.let { updateMinAltitudeScreen(it) }
-
-            // Temps
-            calculateTravelTimeScreen(GpsBuffer)?.let { updateTravelTimeScreen(it) }
-
-            // Dénivelé cumulé
-            calculateCumulativeElevationGainScreen(GpsBuffer)?.let {
-                updateCumulativeElevationGainScreen(it)
-            }
-
-            // Vitesses verticales
-            calculateCurrentVerticalSpeedScreen(GpsBuffer)?.let {
-                updateCurrentVerticalSpeedScreen(it)
-            }
-            calculateMaxVerticalSpeedScreen(GpsBuffer)?.let { updateMaxVerticalSpeedScreen(it) }
-            calculateMinVerticalSpeedScreen(GpsBuffer)?.let { updateMinVerticalSpeedScreen(it) }
-
-            // Pentes
-            calculateCurrentSlopeScreen(GpsBuffer)?.let { updateCurrentSlopeScreen(it) }
-            calculateMaxSlopeScreen(GpsBuffer)?.let { updateMaxSlopeScreen(it) }
-            calculateMinSlopeScreen(GpsBuffer)?.let { updateMinSlopeScreen(it) }
-        }
-    }
-
-}
-
- */
