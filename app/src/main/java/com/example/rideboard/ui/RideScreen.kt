@@ -25,6 +25,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -261,6 +262,7 @@ fun RideScreen(
 
     Scaffold(
         containerColor = Color.Black,
+        contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             RideBottomBar(
                 isntOver = isntOver,
@@ -746,88 +748,94 @@ fun RideBottomBar(
     onToggleSettings: () -> Unit,
     onTogglePoints: () -> Unit
 ) {
-    BoxWithConstraints(
+    Surface(
+        color = Color.Black,
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.Black)
-            .height(34.dp)
+            .navigationBarsPadding()
     ) {
-        val buttonWidth = maxWidth * 0.25f
-        val buttonSetValuesWidth = maxWidth * 0.07f
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(34.dp)
         ) {
-            Button(
-                onClick = onTogglePoints,
-                modifier = Modifier.width(buttonSetValuesWidth),
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isToggleBlocked) Color.Black else if (isRecording) Color.DarkGray else Color.Cyan
-                )
-            ) {
-                Icon(
-                    painter = painterResource(id = R.mipmap.ic_launcher_foreground),
-                    contentDescription = "Route",
-                    tint = Color.Black,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-            Button(
-                onClick = onToggleGps,
-                modifier = Modifier.width(buttonWidth),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording || isToggleBlocked) Color.DarkGray else Color.Green
-                )
+            val buttonWidth = maxWidth * 0.25f
+            val buttonSetValuesWidth = maxWidth * 0.07f
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (isntOver) "Finir" else "Démarrer GPS",
+                Button(
+                    onClick = onTogglePoints,
+                    modifier = Modifier.width(buttonSetValuesWidth),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isToggleBlocked) Color.Black else if (isRecording) Color.DarkGray else Color.Cyan
+                    )
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                        contentDescription = "Route",
+                        tint = Color.Black,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Button(
+                    onClick = onToggleGps,
+                    modifier = Modifier.width(buttonWidth),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRecording || isToggleBlocked) Color.DarkGray else Color.Green
+                    )
+
+                ) {
+                    Text(
+                        text = if (isntOver) "Finir" else "Démarrer GPS",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Button(
+                    onClick = onToggleBlocked,
+                    modifier = Modifier.size(20.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isToggleBlocked) Color(0xFF991100) else Color.Yellow//Color(0xCC77CC00)
+                    )
+                ) { }
+
+                Button(
+                    onClick = onToggleRecording,
+                    modifier = Modifier.width(buttonWidth),
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isToggleBlocked) Color.DarkGray else if (isRecording) Color.Red else Color.Green
+                    )
+                ) {
+                    Text(
+                        text = if (isRecording) "Pause" else "Enregistrer",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Button(
+                    onClick = onToggleSettings,
+                    modifier = Modifier.width(buttonSetValuesWidth),
+                    contentPadding = PaddingValues(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isRecording) Color.Black else Color.Cyan
+                    )
+                ) {
+                    Text(
+                    text = if (isRecording) " " else "+",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Button(
-                onClick = onToggleBlocked,
-                modifier = Modifier.size(20.dp),
-                contentPadding = PaddingValues(0.dp),
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isToggleBlocked) Color(0xFF991100) else Color.Yellow//Color(0xCC77CC00)
-                )
-            ) { }
-
-            Button(
-                onClick = onToggleRecording,
-                modifier = Modifier.width(buttonWidth),
-                contentPadding = PaddingValues(horizontal = 4.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isToggleBlocked) Color.DarkGray else if (isRecording) Color.Red else Color.Green
-                )
-            ) {
-                Text(
-                    text = if (isRecording) "Pause" else "Enregistrer",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Button(
-                onClick = onToggleSettings,
-                modifier = Modifier.width(buttonSetValuesWidth),
-                contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isRecording) Color.Black else Color.Cyan
-                )
-            ) {
-                Text(
-                text = if (isRecording) " " else "+",
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-                )
+                    )
+                }
             }
         }
     }

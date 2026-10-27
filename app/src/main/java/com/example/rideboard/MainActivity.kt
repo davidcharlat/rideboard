@@ -2,12 +2,17 @@ package com.example.rideboard
 
 import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.annotation.RequiresPermission
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.room.Room
 import com.example.rideboard.altitude.AltitudeManager
@@ -29,13 +34,22 @@ class MainActivity : ComponentActivity() {
 
     private val rideViewModel: RideViewModel by viewModels()
 
-    @RequiresPermission(allOf = [
-        Manifest.permission.ACCESS_FINE_LOCATION,
-        Manifest.permission.ACCESS_COARSE_LOCATION,
-        Manifest.permission.ACCESS_NETWORK_STATE,
-        Manifest.permission.INTERNET
-    ])
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        val networkGranted = permissions[Manifest.permission.ACCESS_NETWORK_STATE] ?: false
+        val internetGranted = permissions[Manifest.permission.INTERNET] ?: false
+        if ((fineGranted || coarseGranted) && networkGranted && internetGranted) {
+            startLocationService()
+        } else {
+            Toast.makeText(this, "Permission de localisation, réseau et internet requise pour enregistrer vos sorties.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) // <- empêche la mise en veille auto
 
@@ -45,6 +59,7 @@ class MainActivity : ComponentActivity() {
         CustomProfileStore.load(applicationContext)
         //lecture-copie des profiles BRouter
         BRouterFiles.installProfiles(applicationContext)
+
         // --- Base de données
         val db = Room.databaseBuilder(
             applicationContext,
@@ -69,13 +84,51 @@ class MainActivity : ComponentActivity() {
         AppConfig.altitudeManager = altitudeManager
         AppConfig.sensorManager = CyclingSensorManager(applicationContext)
 
-        // --- Démarrage du service de localisation
-        val serviceIntent = Intent(this, LocationService::class.java)
-        startForegroundService(serviceIntent)
+        // --- Vérification des permissions
+        checkAndRequestPermissions()
 
         // --- Interface utilisateur
         setContent {
             RideScreen(rideViewModel = rideViewModel)
+        }
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissionsToRequest = mutableListOf<String>()
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
+        } else {
+            startLocationService()
+        }
+    }
+
+    private fun startLocationService() {
+        try {
+            val serviceIntent = Intent(this, LocationService::class.java)
+            startForegroundService(serviceIntent)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

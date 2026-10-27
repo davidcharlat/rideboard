@@ -13,9 +13,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,37 +91,45 @@ fun StravaUploadScreen(
             }
         )
 
-        // --- Barre de boutons superposée, toujours accessible ---
-        Row(
+        // --- Barre de boutons superposée, toujours accessible et adaptée aux barres système ---
+        Surface(
+            color = Color.White.copy(alpha = 0.95f),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Color.White.copy(alpha = 0.95f))
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .navigationBarsPadding()
         ) {
-            Button(onClick = onContinueRide) {
-                Text("Reprendre")
-            }
-            Button(onClick = onExportElsewhere) {
-                Text("Export fit")
-            }
-            Button(
-                onClick = onDone,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (uploadDetected) Color(0xFF4CAF50) else Color.Gray
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(if (uploadDetected) "✓ Ok" else "Exit")
+                Button(onClick = onContinueRide) {
+                    Text("Reprendre")
+                }
+                Button(onClick = onExportElsewhere) {
+                    Text("Export fit")
+                }
+                Button(
+                    onClick = onDone,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (uploadDetected) Color(0xFF4CAF50) else Color.Gray
+                    )
+                ) {
+                    Text(if (uploadDetected) "✓ Ok" else "Exit")
+                }
             }
         }
 
-        // Bandeau indicatif si upload détecté
+        // Bandeau indicatif si upload détecté (adapté à la barre de statut)
         if (uploadDetected) {
             Text(
                 text = "Upload Strava détecté ✓",
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .background(Color(0xFF4CAF50))
                     .padding(8.dp),
                 color = Color.White

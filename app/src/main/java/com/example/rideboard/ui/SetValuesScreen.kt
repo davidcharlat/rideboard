@@ -2,6 +2,10 @@ package com.example.rideboard.ui
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Point
+import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,12 +26,25 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.rideboard.AppSettings
 import com.example.rideboard.RideViewModel
+import com.example.rideboard.brouter.BRouterFiles
+import com.example.rideboard.brouter.SegmentDownloader
+import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Overlay
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
-private enum class SettingsPage { MENU, ZONES, PREFERENCES, RINGING, EXPORT, DELETE }
+private enum class SettingsPage { MENU, ZONES, PREFERENCES, RINGING, EXPORT, DELETE, NAV_FILES }
 
 @Composable
 fun SetValuesScreen(
@@ -39,26 +58,36 @@ fun SetValuesScreen(
         page = when (page) {
             SettingsPage.MENU -> { onDone(); SettingsPage.MENU }
             SettingsPage.ZONES, SettingsPage.PREFERENCES -> SettingsPage.MENU
-            SettingsPage.RINGING, SettingsPage.EXPORT, SettingsPage.DELETE -> SettingsPage.PREFERENCES
+            SettingsPage.RINGING, SettingsPage.EXPORT, SettingsPage.DELETE, SettingsPage.NAV_FILES -> SettingsPage.PREFERENCES
         }
     }
 
-    when (page) {
-        SettingsPage.MENU -> MenuPage(
-            onZones = { page = SettingsPage.ZONES },
-            onPreferences = { page = SettingsPage.PREFERENCES },
-            onBack = onDone
-        )
-        SettingsPage.ZONES -> ZonesPage(onBack = { page = SettingsPage.MENU })
-        SettingsPage.PREFERENCES -> PreferencesPage(
-            onRinging = { page = SettingsPage.RINGING },
-            onExport = { page = SettingsPage.EXPORT },
-            onDelete = { page = SettingsPage.DELETE },
-            onBack = { page = SettingsPage.MENU }
-        )
-        SettingsPage.RINGING -> RingingPage(onBack = { page = SettingsPage.PREFERENCES })
-        SettingsPage.EXPORT -> ExportRidePage(onBack = { page = SettingsPage.PREFERENCES })
-        SettingsPage.DELETE -> DeleteRidePage(onBack = { page = SettingsPage.PREFERENCES })
+    Surface(
+        modifier = Modifier.fillMaxSize().systemBarsPadding(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        when (page) {
+            SettingsPage.MENU -> MenuPage(
+                onZones = { page = SettingsPage.ZONES },
+                onPreferences = { page = SettingsPage.PREFERENCES },
+                onBack = onDone
+            )
+            SettingsPage.ZONES -> ZonesPage(onBack = { page = SettingsPage.MENU })
+            SettingsPage.PREFERENCES -> PreferencesPage(
+                onRinging = { page = SettingsPage.RINGING },
+                onExport = { page = SettingsPage.EXPORT },
+                onDelete = { page = SettingsPage.DELETE },
+                onNavFiles = { page = SettingsPage.NAV_FILES },
+                onBack = { page = SettingsPage.MENU }
+            )
+            SettingsPage.RINGING -> RingingPage(onBack = { page = SettingsPage.PREFERENCES })
+            SettingsPage.EXPORT -> ExportRidePage(onBack = { page = SettingsPage.PREFERENCES })
+            SettingsPage.DELETE -> DeleteRidePage(onBack = { page = SettingsPage.PREFERENCES })
+            SettingsPage.NAV_FILES -> NavFilesPage(
+                currentPosition = currentPosition,
+                onBack = { page = SettingsPage.PREFERENCES }
+            )
+        }
     }
 }
 
@@ -179,6 +208,7 @@ private fun PreferencesPage(
     onRinging: () -> Unit,
     onExport: () -> Unit,
     onDelete: () -> Unit,
+    onNavFiles: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -188,6 +218,7 @@ private fun PreferencesPage(
         Button(onClick = onExport, modifier = Modifier.fillMaxWidth()) { Text("Exporter une sortie") }
         Button(onClick = onDelete, modifier = Modifier.fillMaxWidth()) { Text("Supprimer des sorties") }
         Button(onClick = onRinging, modifier = Modifier.fillMaxWidth()) { Text("Sonnerie") }
+        Button(onClick = onNavFiles, modifier = Modifier.fillMaxWidth()) { Text("Actualiser les fichiers de navigation") }
         Spacer(Modifier.weight(1f))
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Retour") }
     }
@@ -378,5 +409,229 @@ private fun RideSelectionPage(
                 Text("$actionLabel (${selected.size})")
             }
         }
+    }
+}
+
+private class TileGridOverlay : Overlay() {
+    var downloaded: Set<String> = emptySet()
+    var selected: Set<String> = emptySet()
+
+    private val gridLine = Paint().apply {
+        style = Paint.Style.STROKE; strokeWidth = 2f; isAntiAlias = true
+        color = android.graphics.Color.argb(170, 70, 70, 70)
+    }
+    private val downloadedFill = Paint().apply {
+        style = Paint.Style.FILL; color = android.graphics.Color.argb(110, 90, 90, 90)
+    }
+    private val selectedFill = Paint().apply {
+        style = Paint.Style.FILL; color = android.graphics.Color.argb(120, 30, 100, 255)
+    }
+    private val selectedLine = Paint().apply {
+        style = Paint.Style.STROKE; strokeWidth = 6f; isAntiAlias = true
+        color = android.graphics.Color.rgb(30, 100, 255)
+    }
+    private val label = Paint().apply {
+        color = android.graphics.Color.BLACK; textSize = 32f
+        textAlign = Paint.Align.CENTER; isAntiAlias = true
+    }
+    private val topLeft = Point()
+    private val bottomRight = Point()
+
+    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+        if (shadow) return
+        val box = mapView.boundingBox
+        val proj = mapView.projection
+
+        val latFrom = (floor(max(box.latSouth, -85.0) / 5.0) * 5).toInt()
+        val latTo = (floor(min(box.latNorth, 84.9) / 5.0) * 5).toInt()
+        val lonFrom = (floor(max(box.lonWest, -180.0) / 5.0) * 5).toInt()
+        val lonTo = (floor(min(box.lonEast, 179.9) / 5.0) * 5).toInt()
+
+        var latBase = latFrom
+        while (latBase <= latTo) {
+            var lonBase = lonFrom
+            while (lonBase <= lonTo) {
+                val name = SegmentDownloader.tileName(latBase, lonBase)
+                proj.toPixels(GeoPoint(latBase + 5.0, lonBase.toDouble()), topLeft)
+                proj.toPixels(GeoPoint(latBase.toDouble(), lonBase + 5.0), bottomRight)
+                val l = topLeft.x.toFloat(); val t = topLeft.y.toFloat()
+                val r = bottomRight.x.toFloat(); val b = bottomRight.y.toFloat()
+
+                if (name in selected) canvas.drawRect(l, t, r, b, selectedFill)
+                else if (name in downloaded) canvas.drawRect(l, t, r, b, downloadedFill)
+                canvas.drawRect(l, t, r, b, if (name in selected) selectedLine else gridLine)
+
+                if (r - l > 120f) {
+                    canvas.drawText(name.removeSuffix(".rd5"), (l + r) / 2f, (t + b) / 2f, label)
+                }
+                lonBase += 5
+            }
+            latBase += 5
+        }
+    }
+
+    /** Nom du fichier correspondant à un point de la carte, ou null hors limites. */
+    fun tileAt(p: GeoPoint): String? {
+        if (p.latitude < -85.0 || p.latitude >= 85.0 || p.longitude < -180.0 || p.longitude >= 180.0) return null
+        val latBase = (floor(p.latitude / 5.0) * 5).toInt()
+        val lonBase = (floor(p.longitude / 5.0) * 5).toInt()
+        return SegmentDownloader.tileName(latBase, lonBase)
+    }
+}
+
+private fun listDownloadedTiles(context: Context): Set<String> =
+    BRouterFiles.segmentsDir(context)
+        .listFiles { f -> f.extension == "rd5" }
+        ?.map { it.name }
+        ?.toSet()
+        ?: emptySet()
+
+@Composable
+private fun NavFilesPage(currentPosition: GeoPoint?, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var downloaded by remember { mutableStateOf(listDownloadedTiles(context)) }
+    var selected by remember { mutableStateOf(setOf<String>()) }
+    var confirm by remember { mutableStateOf(false) }
+    var downloading by remember { mutableStateOf(false) }
+    var job by remember { mutableStateOf<Job?>(null) }
+    var status by remember { mutableStateOf("") }
+    var progress by remember { mutableStateOf(0f) }
+
+    // ---------------- La carte ----------------
+    val overlay = remember { TileGridOverlay() }
+    val mapView = remember {
+        MapView(context).apply {
+            setTileSource(TileSourceFactory.OpenTopo)
+            setMultiTouchControls(true)
+            isHorizontalMapRepetitionEnabled = false
+            isVerticalMapRepetitionEnabled = false
+            controller.setZoom(6.0)
+            controller.setCenter(currentPosition ?: GeoPoint(46.6, 2.4))
+        }
+    }
+    DisposableEffect(Unit) { onDispose { mapView.onDetach() } }
+
+    DisposableEffect(mapView) {
+        val receiver = object : MapEventsReceiver {
+            override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
+                if (downloading) return true
+                val name = overlay.tileAt(p) ?: return true
+                selected = if (name in selected) selected - name else selected + name
+                return true
+            }
+            override fun longPressHelper(p: GeoPoint): Boolean = false
+        }
+        val events = MapEventsOverlay(receiver)
+        mapView.overlays.add(events)
+        mapView.overlays.add(overlay)
+        onDispose {
+            mapView.overlays.remove(events)
+            mapView.overlays.remove(overlay)
+        }
+    }
+
+    LaunchedEffect(downloaded, selected) {
+        overlay.downloaded = downloaded
+        overlay.selected = selected
+        mapView.invalidate()
+    }
+
+    // ---------------- Le téléchargement ----------------
+    fun startDownload() {
+        val names = selected.sorted()
+        downloading = true
+        status = ""
+        job = scope.launch {
+            val failed = mutableListOf<String>()
+            var cancelled = false
+            try {
+                names.forEachIndexed { i, name ->
+                    var lastUpdate = 0L
+                    val ok = SegmentDownloader.download(context, name, force = true) { done, total ->
+                        val now = System.currentTimeMillis()
+                        if (now - lastUpdate > 250) {
+                            lastUpdate = now
+                            progress = if (total > 0) done.toFloat() / total else 0f
+                            status = "Téléchargement de ${name.removeSuffix(".rd5")} (${i + 1}/${names.size}) — " +
+                                    Formatter.formatShortFileSize(context, done) +
+                                    (if (total > 0) " / " + Formatter.formatShortFileSize(context, total) else "")
+                        }
+                    }
+                    if (!ok) failed += name
+                    downloaded = listDownloadedTiles(context)
+                }
+            } catch (e: CancellationException) {
+                cancelled = true
+                throw e
+            } finally {
+                downloading = false
+                progress = 0f
+                selected = selected - names.filter { it !in failed }.toSet()
+                status = when {
+                    cancelled -> "Téléchargement annulé."
+                    failed.isEmpty() -> "${names.size} fichier(s) à jour."
+                    else -> "Échec : ${failed.joinToString { it.removeSuffix(".rd5") }}. " +
+                            "Le fichier n'existe peut-être pas sur le serveur (zone en mer), ou la connexion a été perdue."
+                }
+            }
+        }
+    }
+
+    // ---------------- La mise en page ----------------
+    Column(
+        modifier = Modifier.fillMaxSize().padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text("Fichiers de navigation", style = MaterialTheme.typography.titleMedium)
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
+            AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+        }
+
+        Text(
+            "Gris : déjà téléchargé · Bleu : sélectionné. Touche une case pour la (dé)sélectionner.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        if (downloading) LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+        if (status.isNotEmpty()) Text(status)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (downloading) {
+                OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.weight(1f)) {
+                    Text("Annuler le téléchargement", maxLines = 1)
+                }
+            } else {
+                OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f)) { Text("Retour", maxLines = 1) }
+                Button(
+                    onClick = { confirm = true },
+                    enabled = selected.isNotEmpty(),
+                    modifier = Modifier.weight(1f)
+                ) { Text("Télécharger (${selected.size})", maxLines = 1) }
+            }
+        }
+    }
+
+    if (confirm) {
+        val free = Formatter.formatShortFileSize(context, context.filesDir.usableSpace)
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Télécharger ${selected.size} fichier(s) ?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(selected.sorted().joinToString(", ") { it.removeSuffix(".rd5") })
+                    Text("Les fichiers déjà présents seront remplacés. Chaque fichier peut peser plus de 100 Mo : le Wi-Fi est recommandé.")
+                    Text("Espace libre : $free")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { confirm = false; startDownload() }) { Text("Télécharger") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirm = false }) { Text("Annuler") }
+            }
+        )
     }
 }

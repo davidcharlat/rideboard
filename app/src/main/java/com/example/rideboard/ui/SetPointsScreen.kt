@@ -104,9 +104,9 @@ fun SetPointsScreen(
 
     var isProcessing by remember { mutableStateOf(false) }
 
-    // Charger les données détaillées du TSV lorsque l'on rentre en mode Ajout
+    // Charger les données détaillées du TSV lorsque l'on rentre en mode Ajout/suppression
     LaunchedEffect(screenMode) {
-        if (screenMode == ScreenMode.ADD) {
+        if (screenMode == ScreenMode.ADD || screenMode == ScreenMode.DELETE) {
             withContext(Dispatchers.IO) {
                 rideLinesData = loadRideLinesData(context)
             }
@@ -584,7 +584,7 @@ fun SetPointsScreen(
     }
 
     // --- Structure globale de l'interface ---
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().systemBarsPadding()) {
         when (screenMode) {
             ScreenMode.MAIN -> {
                 Box(

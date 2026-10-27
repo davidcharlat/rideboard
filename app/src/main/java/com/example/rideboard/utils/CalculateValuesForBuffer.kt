@@ -56,7 +56,6 @@ data class AccuracyOfCoordinates(
     val accuracy: Double
 )
 
-    // from here isMoving must be true because newGpsPoint is too far, (otherwise calculateScreenValues already returned)
     fun calculateValuesForBuffer(
         context: Context,
         buffer: GpsBuffer,
@@ -251,10 +250,20 @@ data class AccuracyOfCoordinates(
 
             return
         }
-        if (!newIsStarted) //return previousValues
+        if (!newIsStarted) //return screenValues when gpspoint is not started
         {
+
+            val newAltitude = simplifySampleAltitudeMnt(newGpsPoint, bufferSnapshot) ?: (simplifySampleAltitudeMnt(
+                previousGpsPoint, bufferSnapshot) ?: calculateAltitudeGps(
+                previousGpsPoint,
+                newGpsPoint,
+                latestGpsPoint ?: newGpsPoint, previousIsAltitudeGot, previousSpreadAltitudeAndAltitudeGps, previousUncorrectedGpsAltitude))
+
             sample.gpsPointIsStarted = false
             sample.gpsPointCumulatedGpsPrecision = calculateNewCumulatedGpsPrecision(newGpsPoint,previousCumulatedGpsPrecision)
+            sample.gpsPointLatitude = newGpsPoint.latitude
+            sample.gpsPointLongitude = newGpsPoint.longitude
+            sample.gpsPointAltitude = newAltitude
             return
         }
 

@@ -341,9 +341,13 @@ private fun CustomProfileDialog(onDismiss: () -> Unit) {
                             lastGroup = p.group
                         }
 
-                        val enabled = p.group != CustomProfile.G_ELEVATION ||
-                                p.key == "consider_elevation" || elevationOn
-
+                        val wetOn = values["assume_wet_conditions"] == "true"
+                        val enabled = when {
+                            p.group == CustomProfile.G_ELEVATION -> p.key == "consider_elevation" || elevationOn
+                            p.key.endsWith("_dry") -> !wetOn
+                            p.key.endsWith("_wet") -> wetOn
+                            else -> true
+                        }
                         when (p.type) {
                             ParamType.BOOL -> Row(
                                 verticalAlignment = Alignment.CenterVertically,
