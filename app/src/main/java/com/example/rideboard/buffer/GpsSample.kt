@@ -69,6 +69,8 @@ data class GpsSample(
     var screenPower15: Double = 0.0,
     var screenPower125: Double = 0.0,
     var screenPower1000: Double = 0.0,
+
+    var power: Int? = null,
     var maxScreenPower4: Double = 0.0,
     var maxScreenPower15: Double = 0.0,
     var maxScreenPower125: Double = 0.0,
@@ -82,6 +84,17 @@ data class GpsSample(
     var durationPowerZ3: Long = 0,
     var durationPowerZ4: Long = 0,
     var durationPowerZ5: Long = 0,
+    var powerPercentRightLeft: Int? = null,
+    var powerTorque: Double? = null,
+    var powerCadence: Float? = null,
+    var pedalSmoothnessRight: Float? = null,
+    var pedalSmoothnessLeft: Float? = null,
+    var torqueEffectivenessRight: Float? = null,
+    var torqueEffectivenessLeft: Float? = null,
+
+    var outTemperature: Float? = null,
+    var outHumidity: Float? = null,
+
     var heartRate: Int? = null,
     var correctedHeartRate: Int? = null,
     var durationHRZ2: Long = 0,
@@ -92,10 +105,8 @@ data class GpsSample(
     var minHR: Int? = null,
     var durationHR: Long = 0,
     var totHRForAvg: Long = 0,
-    var power: Int? = null,
+
     var cadence: Int? = null,
-    var powerPercentRightLeft: Int? = null,
-    var powerTorque: Double? = null,
 
     var gpsPointScreenValueDouble1: Double? = 0.0,
     var gpsPointScreenValueDouble2: Double? = 0.0,

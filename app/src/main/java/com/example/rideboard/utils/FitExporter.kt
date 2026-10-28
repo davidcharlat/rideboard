@@ -95,6 +95,7 @@ object FitExporter {
                         val presentHeartRate = tokens[8].toFloatOrNull()?.toInt()?.toShort()
                         val presentPower = tokens[9].toFloatOrNull()?.toInt()
                         val presentCadence = tokens[10].toFloatOrNull()?.toInt()?.toShort()
+                        val presentOutTemperature = tokens[11].toFloatOrNull()?.toInt()?.toShort()
 
                         // Ajustement automatique MS vs Secondes
                         // Si le timestamp est plus petit que 1000000000000, il est probablement déjà en secondes.
@@ -121,6 +122,10 @@ object FitExporter {
                             distance = totalDist
                             power = presentPower
                             cadence = presentCadence
+                            temperature = presentOutTemperature
+                                ?.toInt()
+                                ?.coerceIn(-128, 127)
+                                ?.toByte()
                         }
                         encode.write(recordMesg)
 

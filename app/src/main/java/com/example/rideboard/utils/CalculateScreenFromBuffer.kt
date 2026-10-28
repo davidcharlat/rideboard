@@ -97,6 +97,7 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxVerticalSpeed125 = point.maxVerticalSpeed125,
         maxVerticalSpeed1000 = point.maxVerticalSpeed1000,
         maxSpeed = point.gpsPointMaxSpeed,
+
         screenPower4 = point.screenPower4,
         screenPower15 = point.screenPower15,
         screenPower125 = point.screenPower125,
@@ -110,6 +111,7 @@ fun calculateScreenValues(buffer: GpsBuffer,
         durationPowerZ4 = point.durationPowerZ4,
         durationPowerZ3 = point.durationPowerZ3,
         avgPower = if (point.durationForAveragePower == 0L ) null else point.totalPowerForAveragePower/point.durationForAveragePower.toDouble(),
+
         averageSpeed = if (point.partialDurationTimeForAverageSpeed > 2000L) {
             1000.0*point.partialDistanceForAverageSpeed/(point.partialDurationTimeForAverageSpeed).toDouble()
             }
@@ -122,12 +124,23 @@ fun calculateScreenValues(buffer: GpsBuffer,
         maxSlope = point.gpsPointMaxSlope,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
+
+        power = lastPoint.power,
+        powerPercentRightLeft = lastPoint.powerPercentRightLeft,
+        powerTorque = lastPoint.powerTorque,
+        powerCadence = lastPoint.powerCadence,
+        pedalSmoothnessRight = lastPoint.pedalSmoothnessRight,
+        pedalSmoothnessLeft = lastPoint.pedalSmoothnessLeft,
+        torqueEffectivenessRight = lastPoint.torqueEffectivenessRight,
+        torqueEffectivenessLeft = lastPoint.torqueEffectivenessLeft,
+
+        outTemperature = lastPoint.outTemperature,
+        outHumidity = lastPoint.outHumidity,
+
+        cadence = lastPoint.cadence,
+
         heartRate = lastPoint.heartRate?.toDouble(),
         correctedHeartRate = point.correctedHeartRate,
-        power = lastPoint.power,
-        cadence = lastPoint.cadence,
-        powerPercentRightLeft = point.powerPercentRightLeft,
-        powerTorque = point.powerTorque,
         minHR = point.minHR,
         maxHR = point.maxHR,
         durationHRZ2 = point.durationHRZ2.toInt(),

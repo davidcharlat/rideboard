@@ -967,7 +967,8 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
             newGpsPoint.gpsPointTotalDistance,
             if (newGpsPoint.correctedHeartRate != null) (newGpsPoint.correctedHeartRate!!.toDouble()) else null,
             if (newGpsPoint.power != null) (newGpsPoint.power!!.toDouble()) else null,
-            if (newGpsPoint.cadence != null) (newGpsPoint.cadence!!.toDouble()) else null) as List<Double?>
+            if (newGpsPoint.cadence != null) (newGpsPoint.cadence!!.toDouble()) else null,
+            if (newGpsPoint.outTemperature != null) (newGpsPoint.outTemperature!!.toDouble()) else null) as List<Double?>
     )
     //cr    eation du fichier gps_debug.txt
 

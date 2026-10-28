@@ -12,7 +12,7 @@ object AppSettings {
     var hrZone3 = 138
     var hrZone4 = 155
     var hrZone5 = 163
-    var isRinging = true
+    var isRinging = false
 
     private const val FILE_NAME = "settings.txt"
 
