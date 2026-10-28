@@ -137,7 +137,9 @@ fun calculateScreenValues(buffer: GpsBuffer,
         outTemperature = lastPoint.outTemperature,
         outHumidity = lastPoint.outHumidity,
 
-        cadence = lastPoint.cadence,
+        cadence = if(lastPoint.cadence != null) lastPoint.cadence
+        else if (lastPoint.powerCadence != null) (lastPoint.powerCadence)!!.toInt()
+        else null,
 
         heartRate = lastPoint.heartRate?.toDouble(),
         correctedHeartRate = point.correctedHeartRate,
