@@ -511,7 +511,7 @@ fun RideContent(
                     .height(sensorBarHeight)
                     .background(
                         //if (zoomedCard == null)
-                            Color.Black.copy(alpha = 0.3f) // transparent sur la carte
+                            Color.Black.copy(alpha = 0.15f) // transparent sur la carte
                         //else Color.Black // opaque sur une SpecificView
                     )
             )

@@ -34,18 +34,31 @@ class CyclingSensorManager(private val context: Context) {
     private val activeGatts = mutableMapOf<SensorType, BluetoothGatt>()
     private val sensorValues = mutableMapOf<SensorType, Int>()
 
-    // Température et Humidité pour le capteur Environnement
+    // Cache des valeurs mesurées
+    private var lastPower: Int? = null
+    private var lastPowerBattery: Int? = null
+    private var lastPowerPercentRightLeft: Int? = null
+    private var lastPowerTorque: Double? = null
+    private var lastPowerCadence: Float? = null
+    private var lastPedalSmoothnessLeft: Float? = null
+    private var lastPedalSmoothnessRight: Float? = null
+    private var lastTorqueEffectivenessLeft: Float? = null
+    private var lastTorqueEffectivenessRight: Float? = null
+
     var envTemperature: Float? = null
         private set
     var envHumidity: Float? = null
         private set
 
-    // Suivi de si un capteur a déjà été connecté au moins une fois
     private val everConnected = mutableSetOf<SensorType>()
 
     val sensorStatuses = mutableStateMapOf<SensorType, SensorConnectionStatus>().apply {
         SensorType.values().forEach { put(it, SensorConnectionStatus.DISCONNECTED) }
     }
+
+    // File d'attente pour l'écriture séquentielle des descripteurs GATT
+    private val descriptorWriteQueue = LinkedList<Pair<BluetoothGatt, BluetoothGattDescriptor>>()
+    private var isWritingDescriptor = false
 
     // UUIDs GATT Standards
     private val HEART_RATE_SERVICE = UUID.fromString("0000180d-0000-1000-8000-00805f9b34fb")
@@ -62,7 +75,9 @@ class CyclingSensorManager(private val context: Context) {
     private val TEMPERATURE_MEASUREMENT_CHAR = UUID.fromString("00002a6e-0000-1000-8000-00805f9b34fb")
     private val HUMIDITY_MEASUREMENT_CHAR = UUID.fromString("00002a6f-0000-1000-8000-00805f9b34fb")
 
-    // UUIDs pour capteurs spécifiques (InkBird / Govee)
+    private val BATTERY_SERVICE = UUID.fromString("0000180f-0000-1000-8000-00805f9b34fb")
+    private val BATTERY_LEVEL_CHAR = UUID.fromString("00002a19-0000-1000-8000-00805f9b34fb")
+
     private val INKBIRD_SERVICE = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
     private val INKBIRD_CHAR = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
 
@@ -72,7 +87,6 @@ class CyclingSensorManager(private val context: Context) {
     private var isScanning = false
     private val handler = Handler(Looper.getMainLooper())
 
-    // Variables de calcul de cadence manivelle à partir de la puissance (Pédales Assioma)
     private var lastCrankRevs: Int = -1
     private var lastCrankTime: Int = -1
 
@@ -83,12 +97,17 @@ class CyclingSensorManager(private val context: Context) {
     @SuppressLint("MissingPermission")
     fun startScan(type: SensorType) {
         try {
+            if (sensorStatuses[type] == SensorConnectionStatus.CONNECTED && activeGatts[type] != null) {
+                Log.d("CyclingSensor", "$type est déjà connecté. Scan ignoré.")
+                return
+            }
+
             if (isScanning) stopScan()
             val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
 
             currentScanningType = type
             isScanning = true
-            sensorStatuses[type] = SensorConnectionStatus.SCANNING
+            handler.post { sensorStatuses[type] = SensorConnectionStatus.SCANNING }
             Log.d("CyclingSensor", "Démarrage scan pour $type...")
 
             val settings = ScanSettings.Builder()
@@ -116,11 +135,11 @@ class CyclingSensorManager(private val context: Context) {
             val type = currentScanningType
             if (type != null && sensorStatuses[type] == SensorConnectionStatus.SCANNING) {
                 if (AppConfig.isRecording && everConnected.contains(type) && activeGatts[type] == null) {
-                    sensorStatuses[type] = SensorConnectionStatus.LOST
+                    handler.post { sensorStatuses[type] = SensorConnectionStatus.LOST }
                     Log.d("CyclingSensor", "Scan $type infructueux, passage en LOST (re-scan dans 5s)")
                     handler.postDelayed({ startScan(type) }, 5000)
                 } else {
-                    sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED
+                    handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
                     Log.d("CyclingSensor", "Scan $type terminé sans connexion, retour à DISCONNECTED")
                 }
             }
@@ -139,7 +158,6 @@ class CyclingSensorManager(private val context: Context) {
                 val name = deviceName?.lowercase() ?: ""
                 val serviceUuids = result.scanRecord?.serviceUuids ?: emptyList()
 
-                // Si on cherche un capteur d'environnement, on vérifie aussi les données de broadcast (Govee / InkBird)
                 if (currentScanningType == SensorType.ENVIRONMENT) {
                     val manufacturerData = result.scanRecord?.manufacturerSpecificData
                     parseEnvironmentBroadcast(manufacturerData, name)
@@ -169,9 +187,6 @@ class CyclingSensorManager(private val context: Context) {
         }
     }
 
-    /**
-     * Analyse des données de broadcast (Manufacturer Data) pour les capteurs Govee H5074 & InkBird ITH-11-B
-     */
     private fun parseEnvironmentBroadcast(manufacturerData: android.util.SparseArray<ByteArray>?, deviceName: String) {
         if (manufacturerData == null || manufacturerData.size() == 0) return
         try {
@@ -179,29 +194,22 @@ class CyclingSensorManager(private val context: Context) {
                 val key = manufacturerData.keyAt(i)
                 val data = manufacturerData.valueAt(i) ?: continue
 
-                // Govee H5074 (Company ID 0xEC88 ou 0x0001)
                 if (key == 0xEC88 || key == 0x0001 || deviceName.contains("govee") || deviceName.contains("h5074")) {
                     if (data.size >= 4) {
                         val tempRaw = (data[1].toInt() shl 8) or (data[0].toInt() and 0xFF)
                         val humRaw = (data[3].toInt() shl 8) or (data[2].toInt() and 0xFF)
-
                         val tempFloat = tempRaw / 100.0f
                         val humFloat = humRaw / 100.0f
-
                         if (tempFloat in -40.0f..60.0f && humFloat in 0.0f..100.0f) {
                             updateEnvironmentData(tempFloat, humFloat)
                         }
                     }
-                }
-                // InkBird ITH-11-B / IBS-TH1/TH2
-                else if (deviceName.contains("inkbird") || deviceName.contains("ith") || deviceName.contains("ibs")) {
+                } else if (deviceName.contains("inkbird") || deviceName.contains("ith") || deviceName.contains("ibs")) {
                     if (data.size >= 4) {
                         val tempRaw = (data[1].toInt() shl 8) or (data[0].toInt() and 0xFF)
                         val humRaw = (data[3].toInt() shl 8) or (data[2].toInt() and 0xFF)
-
                         val tempFloat = tempRaw / 100.0f
                         val humFloat = humRaw / 100.0f
-
                         if (tempFloat in -40.0f..60.0f && humFloat in 0.0f..100.0f) {
                             updateEnvironmentData(tempFloat, humFloat)
                         }
@@ -216,12 +224,67 @@ class CyclingSensorManager(private val context: Context) {
     private fun updateEnvironmentData(temp: Float, hum: Float) {
         envTemperature = temp
         envHumidity = hum
-        sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED
+        handler.post { sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED }
 
         GpsBuffer.getLast()?.let { sample ->
             sample.outTemperature = temp
             sample.outHumidity = hum
         }
+    }
+
+    private fun queueDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor) {
+        synchronized(descriptorWriteQueue) {
+            descriptorWriteQueue.add(Pair(gatt, descriptor))
+            if (!isWritingDescriptor) {
+                processNextDescriptorWrite()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun processNextDescriptorWrite() {
+        synchronized(descriptorWriteQueue) {
+            val next = descriptorWriteQueue.poll()
+            if (next == null) {
+                isWritingDescriptor = false
+                // Une fois toutes les souscriptions aux notifications terminées, on peut lire la batterie
+                readBatteryLevelIfAvailable()
+                return
+            }
+            isWritingDescriptor = true
+            val (gatt, descriptor) = next
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                    @Suppress("DEPRECATION")
+                    gatt.writeDescriptor(descriptor)
+                }
+            } catch (e: Exception) {
+                Log.e("CyclingSensor", "Erreur processNextDescriptorWrite", e)
+                isWritingDescriptor = false
+                processNextDescriptorWrite()
+            }
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun readBatteryLevelIfAvailable() {
+        handler.postDelayed({
+            try {
+                activeGatts.values.forEach { gatt ->
+                    val batService = gatt.getService(BATTERY_SERVICE)
+                    val batChar = batService?.getCharacteristic(BATTERY_LEVEL_CHAR)
+                    if (batChar != null && (batChar.properties and BluetoothGattCharacteristic.PROPERTY_READ) != 0) {
+                        gatt.readCharacteristic(batChar)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("CyclingSensor", "Erreur readBatteryLevelIfAvailable", e)
+            }
+        }, 500)
     }
 
     @SuppressLint("MissingPermission")
@@ -236,7 +299,7 @@ class CyclingSensorManager(private val context: Context) {
             activeGatts[type] = gatt
         } catch (e: Exception) {
             Log.e("CyclingSensor", "Erreur connectToDevice", e)
-            sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED
+            handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
         }
     }
 
@@ -247,7 +310,7 @@ class CyclingSensorManager(private val context: Context) {
                 if (newState == BluetoothProfile.STATE_CONNECTED) {
                     Log.i("CyclingSensor", "Connecté au capteur $type")
                     everConnected.add(type)
-                    sensorStatuses[type] = SensorConnectionStatus.CONNECTED
+                    handler.post { sensorStatuses[type] = SensorConnectionStatus.CONNECTED }
                     handler.postDelayed({ gatt.discoverServices() }, 600)
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                     Log.w("CyclingSensor", "Déconnecté du capteur $type (status: $status)")
@@ -256,11 +319,11 @@ class CyclingSensorManager(private val context: Context) {
                     sensorValues.remove(type)
 
                     if (AppConfig.isRecording && everConnected.contains(type)) {
-                        sensorStatuses[type] = SensorConnectionStatus.LOST
+                        handler.post { sensorStatuses[type] = SensorConnectionStatus.LOST }
                         Log.i("CyclingSensor", "Perte de connexion $type pendant la sortie, re-scan dans 5s...")
                         handler.postDelayed({ startScan(type) }, 5000)
                     } else {
-                        sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED
+                        handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
                     }
                 }
             } catch (e: Exception) {
@@ -273,6 +336,9 @@ class CyclingSensorManager(private val context: Context) {
             try {
                 if (status != BluetoothGatt.GATT_SUCCESS) return
 
+                handler.post { sensorStatuses[type] = SensorConnectionStatus.CONNECTED }
+
+                // Recherche uniquement le service principal du type de capteur actuel
                 val serviceUuid = when (type) {
                     SensorType.HEART_RATE -> HEART_RATE_SERVICE
                     SensorType.POWER -> CYCLING_POWER_SERVICE
@@ -286,76 +352,105 @@ class CyclingSensorManager(private val context: Context) {
 
                 if (service != null) {
                     for (char in service.characteristics) {
-                        if (char.uuid == HEART_RATE_MEASUREMENT ||
+                        val props = char.properties
+                        val isNotifiable = (props and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0
+                        if (isNotifiable && (
+                            char.uuid == HEART_RATE_MEASUREMENT ||
                             char.uuid == CYCLING_POWER_MEASUREMENT ||
-                            char.uuid == TORQUE_EFFECTIVENESS_PEDAL_SMOOTHNESS ||
                             char.uuid == CSC_MEASUREMENT ||
                             char.uuid == TEMPERATURE_MEASUREMENT_CHAR ||
                             char.uuid == HUMIDITY_MEASUREMENT_CHAR ||
                             char.uuid == INKBIRD_CHAR
-                        ) {
+                        )) {
                             gatt.setCharacteristicNotification(char, true)
                             val descriptor = char.getDescriptor(CONFIG_DESCRIPTOR)
                             if (descriptor != null) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-                                } else {
-                                    @Suppress("DEPRECATION")
-                                    descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                    @Suppress("DEPRECATION")
-                                    gatt.writeDescriptor(descriptor)
-                                }
+                                queueDescriptorWrite(gatt, descriptor)
                             }
                         }
                     }
                 }
+
+                // Vérifier si le service batterie est aussi présent
+                val batteryService = gatt.getService(BATTERY_SERVICE)
+                if (batteryService != null) {
+                    val batChar = batteryService.getCharacteristic(BATTERY_LEVEL_CHAR)
+                    if (batChar != null) {
+                        val props = batChar.properties
+                        if ((props and (BluetoothGattCharacteristic.PROPERTY_NOTIFY or BluetoothGattCharacteristic.PROPERTY_INDICATE)) != 0) {
+                            gatt.setCharacteristicNotification(batChar, true)
+                            val descriptor = batChar.getDescriptor(CONFIG_DESCRIPTOR)
+                            if (descriptor != null) {
+                                queueDescriptorWrite(gatt, descriptor)
+                            }
+                        }
+                    }
+                }
+
             } catch (e: Exception) {
                 Log.e("CyclingSensor", "Erreur onServicesDiscovered", e)
             }
         }
 
+        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            Log.d("CyclingSensor", "onDescriptorWrite status=$status pour ${descriptor.characteristic.uuid}")
+            handler.post { processNextDescriptorWrite() }
+        }
+
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS && characteristic.uuid == BATTERY_LEVEL_CHAR && value.isNotEmpty()) {
+                val batteryVal = value[0].toInt() and 0xFF
+                lastPowerBattery = batteryVal
+                applyCachedSensorValuesToGpsBuffer()
+            }
+        }
+
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            onCharacteristicRead(gatt, characteristic, characteristic.value ?: byteArrayOf(), status)
+        }
+
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             try {
                 if (sensorStatuses[type] != SensorConnectionStatus.CONNECTED) {
-                    sensorStatuses[type] = SensorConnectionStatus.CONNECTED
+                    handler.post { sensorStatuses[type] = SensorConnectionStatus.CONNECTED }
                 }
 
                 when (characteristic.uuid) {
                     HEART_RATE_MEASUREMENT -> {
                         val flag = value[0].toInt()
                         val format = if (flag and 0x01 != 0) 1 else 0
-                        sensorValues[SensorType.HEART_RATE] = if (format == 0) value[1].toInt() and 0xFF else ((value[2].toInt() and 0xFF) shl 8) or (value[1].toInt() and 0xFF)
+                        val hr = if (format == 0) value[1].toInt() and 0xFF else ((value[2].toInt() and 0xFF) shl 8) or (value[1].toInt() and 0xFF)
+                        sensorValues[SensorType.HEART_RATE] = hr
                     }
 
                     CYCLING_POWER_MEASUREMENT -> {
-                        // Extraction de la puissance (watts)
                         val flags = ((value[1].toInt() and 0xFF) shl 8) or (value[0].toInt() and 0xFF)
                         val powerVal = ((value[3].toInt() and 0xFF) shl 8) or (value[2].toInt() and 0xFF)
                         sensorValues[SensorType.POWER] = powerVal
+                        lastPower = powerVal
 
                         var offset = 4
 
-                        // Bit 0: Pedal Power Balance Present (Equilibre Droite / Gauche)
                         var rightLeftVal: Int? = null
                         if ((flags and 0x01) != 0 && value.size > offset) {
                             rightLeftVal = value[offset].toInt() and 0xFF
+                            lastPowerPercentRightLeft = rightLeftVal
                             offset += 1
                         }
 
-                        // Bit 2: Accumulated Torque Present
                         var torqueVal: Double? = null
                         if ((flags and 0x04) != 0 && value.size >= offset + 2) {
                             val accTorque = ((value[offset + 1].toInt() and 0xFF) shl 8) or (value[offset].toInt() and 0xFF)
                             torqueVal = accTorque / 32.0
+                            lastPowerTorque = torqueVal
                             offset += 2
                         }
 
-                        // Bit 4: Wheel Revolution Data
                         if ((flags and 0x10) != 0) {
                             offset += 6
                         }
 
-                        // Bit 5: Crank Revolution Data (Cadence via les pédales Assioma / Capteur de puissance)
                         var cadenceVal: Float? = null
                         if ((flags and 0x20) != 0 && value.size >= offset + 4) {
                             val crankRevs = ((value[offset + 1].toInt() and 0xFF) shl 8) or (value[offset].toInt() and 0xFF)
@@ -366,40 +461,36 @@ class CyclingSensorManager(private val context: Context) {
                                 val dTime = ((crankTime - lastCrankTime) and 0xFFFF) / 1024.0f
                                 if (dTime > 0) {
                                     cadenceVal = (dCrank / dTime) * 60.0f
+                                    lastPowerCadence = cadenceVal
                                 }
                             }
                             lastCrankRevs = crankRevs
                             lastCrankTime = crankTime
                         }
 
-                        // Mise à jour de GpsBuffer avec les données détaillées de puissance
-                        GpsBuffer.getLast()?.let { sample ->
-                            sample.power = powerVal
-                            if (rightLeftVal != null) sample.powerPercentRightLeft = rightLeftVal
-                            if (torqueVal != null) sample.powerTorque = torqueVal
-                            if (cadenceVal != null) sample.powerCadence = cadenceVal
+                        applyCachedSensorValuesToGpsBuffer()
+                    }
+
+                    TORQUE_EFFECTIVENESS_PEDAL_SMOOTHNESS -> {
+                        if (value.size >= 4) {
+                            lastTorqueEffectivenessLeft = (value[0].toInt() and 0xFF) / 2.0f
+                            lastTorqueEffectivenessRight = (value[1].toInt() and 0xFF) / 2.0f
+                            lastPedalSmoothnessLeft = (value[2].toInt() and 0xFF) / 2.0f
+                            lastPedalSmoothnessRight = (value[3].toInt() and 0xFF) / 2.0f
+
+                            applyCachedSensorValuesToGpsBuffer()
                         }
                     }
 
-                    // Caractéristique GATT 0x2A69 : Efficacité du couple & Fluidité du pédalage (Assioma / Capteurs avancés)
-                    TORQUE_EFFECTIVENESS_PEDAL_SMOOTHNESS -> {
-                        if (value.size >= 4) {
-                            val teLeft = (value[0].toInt() and 0xFF) / 2.0f
-                            val teRight = (value[1].toInt() and 0xFF) / 2.0f
-                            val psLeft = (value[2].toInt() and 0xFF) / 2.0f
-                            val psRight = (value[3].toInt() and 0xFF) / 2.0f
-
-                            GpsBuffer.getLast()?.let { sample ->
-                                sample.torqueEffectivenessLeft = teLeft
-                                sample.torqueEffectivenessRight = teRight
-                                sample.pedalSmoothnessLeft = psLeft
-                                sample.pedalSmoothnessRight = psRight
-                            }
+                    BATTERY_LEVEL_CHAR -> {
+                        if (value.isNotEmpty()) {
+                            val batteryVal = value[0].toInt() and 0xFF
+                            lastPowerBattery = batteryVal
+                            applyCachedSensorValuesToGpsBuffer()
                         }
                     }
 
                     CSC_MEASUREMENT -> {
-                        // CSC Measurement classique pour cadence seule
                     }
 
                     TEMPERATURE_MEASUREMENT_CHAR, INKBIRD_CHAR -> {
@@ -408,8 +499,8 @@ class CyclingSensorManager(private val context: Context) {
                             val tempFloat = tempRaw / 100.0f
                             if (tempFloat in -40.0f..60.0f) {
                                 envTemperature = tempFloat
-                                GpsBuffer.getLast()?.outTemperature = tempFloat
-                                sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED
+                                handler.post { sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED }
+                                applyCachedSensorValuesToGpsBuffer()
                             }
                         }
                     }
@@ -420,8 +511,8 @@ class CyclingSensorManager(private val context: Context) {
                             val humFloat = humRaw / 100.0f
                             if (humFloat in 0.0f..100.0f) {
                                 envHumidity = humFloat
-                                GpsBuffer.getLast()?.outHumidity = humFloat
-                                sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED
+                                handler.post { sensorStatuses[SensorType.ENVIRONMENT] = SensorConnectionStatus.CONNECTED }
+                                applyCachedSensorValuesToGpsBuffer()
                             }
                         }
                     }
@@ -434,6 +525,22 @@ class CyclingSensorManager(private val context: Context) {
         @Suppress("DEPRECATION")
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             onCharacteristicChanged(gatt, characteristic, characteristic.value)
+        }
+    }
+
+    private fun applyCachedSensorValuesToGpsBuffer() {
+        GpsBuffer.getLast()?.let { sample ->
+            if (lastPower != null) sample.power = lastPower
+            if (lastPowerBattery != null) sample.powerBattery = lastPowerBattery
+            if (lastPowerPercentRightLeft != null) sample.powerPercentRightLeft = lastPowerPercentRightLeft
+            if (lastPowerTorque != null) sample.powerTorque = lastPowerTorque
+            if (lastPowerCadence != null) sample.powerCadence = lastPowerCadence
+            if (lastPedalSmoothnessLeft != null) sample.pedalSmoothnessLeft = lastPedalSmoothnessLeft
+            if (lastPedalSmoothnessRight != null) sample.pedalSmoothnessRight = lastPedalSmoothnessRight
+            if (lastTorqueEffectivenessLeft != null) sample.torqueEffectivenessLeft = lastTorqueEffectivenessLeft
+            if (lastTorqueEffectivenessRight != null) sample.torqueEffectivenessRight = lastTorqueEffectivenessRight
+            if (envTemperature != null) sample.outTemperature = envTemperature
+            if (envHumidity != null) sample.outHumidity = envHumidity
         }
     }
 }

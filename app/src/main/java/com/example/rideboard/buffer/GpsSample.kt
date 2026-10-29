@@ -91,6 +91,7 @@ data class GpsSample(
     var pedalSmoothnessLeft: Float? = null,
     var torqueEffectivenessRight: Float? = null,
     var torqueEffectivenessLeft: Float? = null,
+    var powerBattery: Int? = null,
 
     var outTemperature: Float? = null,
     var outHumidity: Float? = null,

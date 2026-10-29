@@ -76,7 +76,8 @@ private fun PowerViewScreen1(
         ) {
             val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-            val textToPrint = "Puissance: ${screenValues.power ?: "--"} W"
+            val batText = if (screenValues.powerBattery != null) " (${screenValues.powerBattery}%)" else ""
+            val textToPrint = "Pow: ${screenValues.power ?: "--"} W$batText"
 
             val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.9f).toSp() }
 

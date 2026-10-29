@@ -125,20 +125,21 @@ fun calculateScreenValues(buffer: GpsBuffer,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
 
-        power = lastPoint.power,
-        powerPercentRightLeft = lastPoint.powerPercentRightLeft,
-        powerTorque = lastPoint.powerTorque,
-        powerCadence = lastPoint.powerCadence,
-        pedalSmoothnessRight = lastPoint.pedalSmoothnessRight,
-        pedalSmoothnessLeft = lastPoint.pedalSmoothnessLeft,
-        torqueEffectivenessRight = lastPoint.torqueEffectivenessRight,
-        torqueEffectivenessLeft = lastPoint.torqueEffectivenessLeft,
+        power = (lastPoint.power)?:point.power,
+        powerPercentRightLeft = (lastPoint.powerPercentRightLeft)?:point.powerPercentRightLeft,
+        powerTorque = (lastPoint.powerTorque)?:point.powerTorque,
+        powerCadence = (lastPoint.powerCadence)?:point.powerCadence,
+        pedalSmoothnessRight = (lastPoint.pedalSmoothnessRight)?:point.pedalSmoothnessRight,
+        pedalSmoothnessLeft = (lastPoint.pedalSmoothnessLeft)?:point.pedalSmoothnessLeft,
+        torqueEffectivenessRight = (lastPoint.torqueEffectivenessRight)?:point.torqueEffectivenessRight,
+        torqueEffectivenessLeft = (lastPoint.torqueEffectivenessLeft)?:point.torqueEffectivenessLeft,
+        powerBattery = (lastPoint.powerBattery)?:point.powerBattery,
 
-        outTemperature = lastPoint.outTemperature,
-        outHumidity = lastPoint.outHumidity,
+        outTemperature = (lastPoint.outTemperature)?:point.outTemperature,
+        outHumidity = (lastPoint.outHumidity)?:point.outHumidity,
 
-        cadence = if(lastPoint.cadence != null) lastPoint.cadence
-        else if (lastPoint.powerCadence != null) (lastPoint.powerCadence)!!.toInt()
+        cadence = if(lastPoint.cadence != null || point.cadence != null) (lastPoint.cadence)?:point.cadence
+        else if (lastPoint.powerCadence != null || point.powerCadence != null) ((lastPoint.powerCadence)?:point.powerCadence)!!.toInt()
         else null,
 
         heartRate = lastPoint.heartRate?.toDouble(),

@@ -105,6 +105,7 @@ data class ScreenValues(
     val pedalSmoothnessLeft: Float? = null,
     val torqueEffectivenessRight: Float? = null,
     val torqueEffectivenessLeft: Float? = null,
+    val powerBattery: Int? = null,
 
     val outTemperature: Float? = null,
     val outHumidity: Float? = null,
