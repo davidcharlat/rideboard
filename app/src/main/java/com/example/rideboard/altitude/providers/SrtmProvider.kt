@@ -28,7 +28,7 @@ class SrtmProvider(private val repository: AltitudeRepository) : AltitudeProvide
         val url = "https://api.opentopodata.org/v1/srtm30m?locations=$lat,$lon"
 
         //debug pour tester le nombre de requetes simultanée, à enlever aussi dans le finally
-        AppConfig.activeAltitudeSrtmRequests++
+        //AppConfig.activeAltitudeSrtmRequests++
 
         val request = Request.Builder().url(url).build()
 //paquet de test:
@@ -63,7 +63,8 @@ class SrtmProvider(private val repository: AltitudeRepository) : AltitudeProvide
                 null
             }
             finally {
-                AppConfig.activeAltitudeSrtmRequests--
+                //debug: on enleve 1 dans tous les cas
+                //AppConfig.activeAltitudeSrtmRequests--
             }
         }
     }

@@ -79,6 +79,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
+import com.example.rideboard.ui.views.EnvironmentView
 import com.example.rideboard.ui.views.HeartRateView
 import com.example.rideboard.ui.views.PowerView
 import com.example.rideboard.ui.views.VerticalSpeedView
@@ -229,6 +230,8 @@ fun RideScreen(
                 (File(context.filesDir, "ride.tcx")).delete()
                 rideViewModel.clearTrack()
                 context.stopService(Intent(context, LocationService::class.java))
+                AppConfig.sensorManager?.release()
+                AppConfig.sensorManager = null
                 (context as? Activity)?.finish()
             }
         )
@@ -454,13 +457,7 @@ fun RideContent(
                             )
                         }
                         "VerticalSpeed" -> {
-                            VerticalSpeedView(
-                                cardName = zoomedCard!!,
-                                screenValues = screenValues,
-                                currentTime = currentTime,
-                                numberOfValues = 7,
-                                resetBoutons = listOf(0, 1, 1, 0, 0, 0, 0, 0, 0)
-                            )
+                            VerticalSpeedView(screenValues = screenValues)
                         }
                         "heartRate" -> {
                             HeartRateView(screenValues = screenValues)
@@ -468,13 +465,16 @@ fun RideContent(
                         "power" -> {
                             PowerView(screenValues = screenValues)
                         }
+                        "environment" -> {
+                            EnvironmentView(screenValues = screenValues)
+                        }
                         "Direction" -> {
                             SpecificView(
                                 cardName = zoomedCard!!,
                                 screenValues = screenValues,
                                 currentTime = currentTime,
                                 numberOfValues = 3,
-                                resetBoutons = listOf(1, 0, 0, 0, 0, 0)
+                                resetBoutons = listOf(0, 0, 0, 0, 0, 0)
                             )
                         }
                         "cadence" -> {
@@ -483,7 +483,7 @@ fun RideContent(
                                 screenValues = screenValues,
                                 currentTime = currentTime,
                                 numberOfValues = 1,
-                                resetBoutons = listOf(0, 0, 0, 0, 0, 0)
+                                resetBoutons = listOf(0, 1, 1, 1, 0, 0)
                             )
                         }
                         else -> {
@@ -800,7 +800,7 @@ fun RideBottomBar(
 
                 ) {
                     Text(
-                        text = if (isntOver) "Finir" else "Démarrer GPS",
+                        text = if (isRecording || isToggleBlocked) " " else "Terminer",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -825,7 +825,7 @@ fun RideBottomBar(
                     )
                 ) {
                     Text(
-                        text = if (isRecording) "Pause" else "Enregistrer",
+                        text = if (isRecording) "Pause" else "Reprendre",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -890,11 +890,14 @@ fun SpecificView(
         )
         "power" -> listOf(
             "Puissance" to (screenValues.power?.toString() ?: "--") to "power",
-            "Équilibre L/R" to (screenValues.powerPercentRightLeft?.toString() ?: "--") to "powerPercentRightLeft",
-            "Couple" to (screenValues.powerTorque?.toString() ?: "--") to "powerTorque"
+            //"Équilibre L/R" to (screenValues.powerPercentRightLeft?.toString() ?: "--") to "powerPercentRightLeft",
+            //"Couple" to (screenValues.powerTorque?.toString() ?: "--") to "powerTorque"
         )
         "cadence" -> listOf(
-            "Cadence" to (screenValues.cadence?.toString() ?: "--") to "cadence"
+            "Cadence" to (screenValues.cadence?.toString() ?: "--") to "cadence",
+            "Nb de tours" to (screenValues.totalRevolutions.toString()) to "tours",
+            "moyenne" to (screenValues.averageCadence?.let { "%.1f".format(it) } ?: "--") to "averageCadence",
+            "max" to (screenValues.maxCadence?.toString() ?: "--") to "maxCadence"
         )
         else -> emptyList()
     }

@@ -441,11 +441,10 @@ fun calculateDisplayedSpeed (oldestPoint: GpsSample, olderPoint: GpsSample,oldPo
     val s3 = if (gps3 == null && gps2 == null) {(gps1?:0.0).toDouble()}
     else if ((gps3?:0.0) == 0.0) max(0.0,min ((gps2?:0.0).toDouble(),(gps2?:0.0).toDouble()*1.5-(gps1?:0.0).toDouble()*0.5))
     else (gps1?:0.0).toDouble()
-    val speedGps = max (s2,3.0*s2/5.0+s1/5.0+s3/5.0)
-    val speedPoints = minOf(
-        oldestPoint.gpsPointSpeed/4.0+olderPoint.gpsPointSpeed/4.0+oldPoint.gpsPointSpeed/4.0+newSpeed/4.0,
-        olderPoint.gpsPointSpeed/3.0+oldPoint.gpsPointSpeed/3.0+newSpeed/2.0,
-        oldPoint.gpsPointSpeed/2.0+newSpeed/2.0)
+    val speedGps = max (s2,s1/2.0+s3/2.0)
+    val minOfSpeedPoints = minOf(oldestPoint.gpsPointSpeed,olderPoint.gpsPointSpeed, oldPoint.gpsPointSpeed, newSpeed)
+    val speedPoints = if (minOfSpeedPoints < previousDisplayedSpeed) minOfSpeedPoints
+        else 0.5 * previousDisplayedSpeed + 0.5 * minOfSpeedPoints
     return max (speedGps,speedPoints)
 }
 
@@ -842,6 +841,18 @@ fun findMaxOfIncreasingThenDecreasingFunction(
         x = xMax,
         y = f(xMax)
     )
+}
+
+fun <T : Number> minOrNull(a:T?, b:T?):T? {
+    if (a == null) return b
+    if (b == null) return a
+    return if (a.toDouble() < b.toDouble()) a else b
+}
+
+fun <T : Number> maxOrNull(a:T?, b:T?):T? {
+    if (a == null) return b
+    if (b == null) return a
+    return if (a.toDouble() > b.toDouble()) a else b
 }
 
 fun simplifySampleAltitudeMnt(sample: GpsSample, buffer: List<GpsSample>):Double? {

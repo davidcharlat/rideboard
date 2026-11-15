@@ -682,7 +682,7 @@ fun SetPointsScreen(
                         MapView(context).apply {
                             setTileSource(TileSourceFactory.OpenTopo)
                             setMultiTouchControls(true)
-                            controller.setZoom(15.0)
+                            controller.setZoom(AppConfig.mapZoom)
                             if (trackPoints.isNotEmpty()) {
                                 val lastPoint = trackPoints.last()
                                 controller.setCenter(GeoPoint(lastPoint.first, lastPoint.second))
@@ -928,7 +928,7 @@ fun SetPointsScreen(
                         MapView(context).apply {
                             setTileSource(TileSourceFactory.OpenTopo)
                             setMultiTouchControls(true)
-                            controller.setZoom(15.0)
+                            controller.setZoom(AppConfig.mapZoom)
                             if (trackPoints.isNotEmpty()) {
                                 val lastPoint = trackPoints.last()
                                 controller.setCenter(GeoPoint(lastPoint.first, lastPoint.second))

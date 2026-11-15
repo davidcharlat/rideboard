@@ -85,16 +85,26 @@ data class GpsSample(
     var durationPowerZ4: Long = 0,
     var durationPowerZ5: Long = 0,
     var powerPercentRightLeft: Int? = null,
-    var powerTorque: Double? = null,
+    var smoothedPowerPercentRightLeft: Float? = null,
+    //var powerTorque: Double? = null,
+    var maxPowerTorque: Double? = null,
     var powerCadence: Float? = null,
-    var pedalSmoothnessRight: Float? = null,
-    var pedalSmoothnessLeft: Float? = null,
-    var torqueEffectivenessRight: Float? = null,
-    var torqueEffectivenessLeft: Float? = null,
+    var totalForPowerTorqueAverage: Double? = 0.0,
+    var totalPower: Int = 0,
+    var durationForPowerTorqueAverage: Long = 0,
+    //var pedalSmoothnessRight: Float? = null,
+    //var pedalSmoothnessLeft: Float? = null,
+    //var torqueEffectivenessRight: Float? = null,
+    //var torqueEffectivenessLeft: Float? = null,
     var powerBattery: Int? = null,
 
     var outTemperature: Float? = null,
+    var maxOutTemperature: Float? = null,
+    var minOutTemperature: Float? = null,
+    var totalForAverageTemperature: Float? = null,
+    var durationForAverageTemperature: Long = 0,
     var outHumidity: Float? = null,
+    var environmentBattery: Int? = null,
 
     var heartRate: Int? = null,
     var correctedHeartRate: Int? = null,
@@ -106,18 +116,23 @@ data class GpsSample(
     var minHR: Int? = null,
     var durationHR: Long = 0,
     var totHRForAvg: Long = 0,
+    var heartRateBattery: Int? = null,
 
     var cadence: Int? = null,
+    var maxCadence: Int? = null,
+    var averageCadence: Int? = null,
+    var timeForAverageCadence: Long = 0,
+    var totalRevolutionsForAverage: Double = 0.0,
+    var totalRevolutions: Double = 0.0,
+    var cadenceBattery: Int? = null,
 
-    var gpsPointScreenValueDouble1: Double? = 0.0,
-    var gpsPointScreenValueDouble2: Double? = 0.0,
-    var gpsPointScreenValueDouble3: Double? = 0.0,
-    var gpsPointScreenValue: Boolean? = false,
     var gpsPointScreenValueString: String? = "",
-    var gpsPointScreenValueString2: String? = "",
-    var gpsPointScreenValueString3: String? = "",
-    var gpsPointScreenValueString4: String? = "",
+
+    /*
+    var gpsPointScreenValueDouble1: Double? = 0.0,
     var gpsPointScreenValueBoolean: Boolean? = false,
     var gpsPointScreenValueLong: Long? = 0,
     var gpsPointScreenValueInt: Int? = 0
+
+     */
 )

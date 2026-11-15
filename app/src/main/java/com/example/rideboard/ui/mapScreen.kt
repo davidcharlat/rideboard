@@ -5,6 +5,7 @@ import android.view.MotionEvent
 import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,8 +29,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -39,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.example.rideboard.R
 import com.example.rideboard.RideViewModel
+import com.example.rideboard.config.AppConfig
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -62,6 +66,8 @@ fun MapScreen(
     onNavClick: () -> Unit = {},
     routeRemaining: RideViewModel.RouteRemaining? = null
 ) {
+    val scaleOverlay = remember { MapScaleOverlay() }
+    val bottomInsetPx = with(LocalDensity.current) { bottomInset.toPx() }
     val textMeasurer = rememberTextMeasurer()
     val context = LocalContext.current
     val isNavShown = plannedRoute.isNotEmpty()
@@ -69,7 +75,7 @@ fun MapScreen(
         MapView(context).apply {
             setTileSource(TileSourceFactory.OpenTopo)  //MAPNIK
             setMultiTouchControls(true)
-            controller.setZoom(14.9)
+            controller.setZoom(AppConfig.mapZoom)
 
             // mapOrientation reste à sa valeur par défaut (0 = nord en haut)
         }
@@ -104,6 +110,15 @@ fun MapScreen(
     DisposableEffect(mapView, positionMarker) {
         mapView.overlays.add(positionMarker)
         onDispose { mapView.overlays.remove(positionMarker) }
+    }
+
+    DisposableEffect(mapView, scaleOverlay) {
+        mapView.overlays.add(scaleOverlay)
+        onDispose { mapView.overlays.remove(scaleOverlay) }
+    }
+    LaunchedEffect(bottomInsetPx) {
+        scaleOverlay.bottomInsetPx = bottomInsetPx
+        mapView.invalidate()
     }
 
     var autoRecenter by remember { mutableStateOf(true) }
@@ -160,7 +175,7 @@ fun MapScreen(
         onDispose { mapView.setOnTouchListener(null) }
     }
 
-    Box(modifier = modifier) {
+    BoxWithConstraints(modifier = modifier.clipToBounds()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { mapView }
@@ -168,11 +183,12 @@ fun MapScreen(
 
         routeRemaining?.let { r ->
             val text = formatRemaining(r)
-            val widthPerValuePx = maxWidth.toFloat() / max(1, text.length)
+            // au plus la moitié de la carte, moins le remplissage (2 × 8 dp) -> 0.5f ; 0.85f ça dépasse sur l'échalle
+            val availableWidthPx = with(LocalDensity.current) { (maxWidth * 0.8f - 16.dp).toPx() }
             val font = computeFontSize(
                 textMeasurer = textMeasurer,
-                values = listOf(text, "    "),
-                availableWidthPx = widthPerValuePx,
+                values = listOf(text),
+                availableWidthPx = availableWidthPx,
                 maxFontSize = 30.sp,
                 minFontSize = 6.sp
             )
@@ -194,10 +210,10 @@ fun MapScreen(
                 .align(Alignment.TopEnd)
                 .padding(8.dp)
         ) {
-            IconButton(onClick = { if (!isToggleBlocked) mapView.controller.zoomIn() }) {
+            IconButton(onClick = { if (!isToggleBlocked) {AppConfig.mapZoom += 1 ; mapView.controller.zoomIn() }}) {
                 Icon(Icons.Default.Add, contentDescription = "Zoom +")
             }
-            IconButton(onClick = { if (!isToggleBlocked) mapView.controller.zoomOut() }) {
+            IconButton(onClick = { if (!isToggleBlocked) {AppConfig.mapZoom -= 1 ; mapView.controller.zoomOut() }}) {
                 Icon(Icons.Default.Remove, contentDescription = "Zoom -")
             }
 

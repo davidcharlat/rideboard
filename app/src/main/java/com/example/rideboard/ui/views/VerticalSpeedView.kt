@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.ui.computeFontSize
 import com.example.rideboard.utils.ScreenValues
 import kotlin.math.max
@@ -34,12 +35,7 @@ import kotlin.math.max
 
 @Composable
 fun VerticalSpeedView(
-    cardName: String,
-    screenValues: ScreenValues,
-    currentTime: Long,
-    numberOfValues: Int,
-    resetBoutons: List<Int>
-
+    screenValues: ScreenValues
 ) {
     val textMeasurer = rememberTextMeasurer()
 
@@ -173,7 +169,7 @@ fun VerticalSpeedView(
             ) {
                 Button(
                     onClick = {
-                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "minVerticalSpeed"
+                        GpsBuffer.getLast()?.gpsPointStringToReset = "minVerticalSpeed"
                     },
                     modifier = Modifier.size(20.dp),
                     contentPadding = PaddingValues(0.dp),
@@ -238,7 +234,7 @@ fun VerticalSpeedView(
             ) {
                 Button(
                     onClick = {
-                        com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed"
+                        GpsBuffer.getLast()?.gpsPointStringToReset = "maxVerticalSpeed"
                     },
                     modifier = Modifier.size(20.dp),
                     contentPadding = PaddingValues(0.dp),

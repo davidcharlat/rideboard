@@ -1,5 +1,6 @@
 package com.example.rideboard.buffer
 
+import com.example.rideboard.config.AppConfig
 import java.util.ArrayDeque
 
 /**
@@ -9,7 +10,7 @@ import java.util.ArrayDeque
  */
 object GpsBuffer {
 
-    private const val MAX_SIZE = 8  // Ajuste selon ta logique
+    private const val MAX_SIZE = 8
     private val samples = ArrayDeque<GpsSample>()
 
     /**

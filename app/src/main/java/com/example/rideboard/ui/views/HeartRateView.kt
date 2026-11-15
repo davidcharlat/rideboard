@@ -38,7 +38,7 @@ fun HeartRateView(
     screenValues: ScreenValues
 ) {
     val textMeasurer = rememberTextMeasurer()
-
+    val batText = if (screenValues.heartRateBattery != null) " (${screenValues.heartRateBattery}%)" else ""
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -73,11 +73,11 @@ fun HeartRateView(
 
                 val labelFont = computeFontSize(
                     textMeasurer = textMeasurer,
-                    values = listOf("  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm"),
+                    values = listOf("  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm $batText"),
                     availableWidthPx = availableWidthPx,
                     maxFontSize = maxLabelFont,
                     minFontSize = 6.sp
-                ) * 1.2f
+                )
                 val valueFont = computeFontSize(
                     textMeasurer = textMeasurer,
                     values = listOf("${screenValues.correctedHeartRate ?: "--"} bpm"),
@@ -92,13 +92,14 @@ fun HeartRateView(
                     Row()
                     {
                     Text(
-                        text = "  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm",
+                        text = "  rythme cardiaque:${screenValues.heartRate ?: "--"} bpm $batText",
                         color = Color.Gray,
                         fontSize = labelFont,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
                     )
+                       /*
                         Button(
                             onClick = {
                             },
@@ -108,6 +109,8 @@ fun HeartRateView(
                         ) {
                             Text("...")
                         }
+
+                        */
                 }
                     Text(
                         text = "${screenValues.correctedHeartRate ?: "--"} bpm",

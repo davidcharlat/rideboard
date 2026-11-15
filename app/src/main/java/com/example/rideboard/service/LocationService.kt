@@ -14,6 +14,7 @@ import com.example.rideboard.AppEvents
 import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.buffer.GpsSample
 import com.example.rideboard.config.AppConfig
+import com.example.rideboard.utils.CyclingSensorManager
 import com.example.rideboard.utils.calculateValuesForBuffer
 import com.google.android.gms.location.*
 import kotlinx.coroutines.*
@@ -73,6 +74,8 @@ class LocationService : Service() {
                         heartRate = AppConfig.sensorManager?.heartRate,
                         power = AppConfig.sensorManager?.power,
                         cadence = AppConfig.sensorManager?.cadence,
+                        outTemperature = AppConfig.sensorManager?.envTemperature,
+                        outHumidity = AppConfig.sensorManager?.envHumidity,
                         gpsPointSpeed = 0.0,
                         gpsPointAcceleration = 0.0,
                         gpsPointVerticalSpeed   = 0.0,
@@ -94,8 +97,9 @@ class LocationService : Service() {
                         gpsPointDisplayedVerticalSpeed = 0.0,
                         gpsPointDisplayedAltitude = null,
                         gpsPointDisplayedSpeed = 0.0,
-                        gpsPointDurationHighSpreadAltitude = 0,
+                        gpsPointDurationHighSpreadAltitude = 0
 
+                        /*
                         gpsPointScreenValueDouble1 = 0.0,
                         gpsPointScreenValueDouble2 = 0.0,
                         gpsPointScreenValueDouble3 = 0.0,
@@ -108,10 +112,13 @@ class LocationService : Service() {
                         gpsPointScreenValueLong = 0,
                         gpsPointScreenValueInt = 0
 
+                         */
+
                     )
 
                     // Enregistre dans le buffer
                     GpsBuffer.add(sample)
+                    CyclingSensorManager(applicationContext).applyCachedSensorValuesToGpsBuffer()
                     correctGpsPosition1MeterToLeft(GpsBuffer)
                     processSampleForAltitudeAccuracy(sample)
                     calculateValuesForBuffer(applicationContext, GpsBuffer)
@@ -119,7 +126,6 @@ class LocationService : Service() {
 
                     // Lance la récupération d'altitude
                     serviceScope.launch {
-                        // lorsqqu'on passait par appconfig: calculateValues(applicationContext, GpsBuffer)
                         AppEvents.emitGpsSample(sample)
                     }
 

@@ -93,11 +93,11 @@ fun SensorView(
                             SensorType.CADENCE -> Triple("\u21BB", screenValues.cadence?.toString(), "cadence")
                             SensorType.ENVIRONMENT -> {
                                 val temp = screenValues.outTemperature
-                                val hum = screenValues.outHumidity
+                               // val hum = screenValues.outHumidity
                                 val envStr = when {
-                                    temp != null && hum != null -> "%.1f° %.0f%%".format(temp, hum)
+                                  //  temp != null && hum != null -> "%.1f° %.0f%%".format(temp, hum)
                                     temp != null -> "%.1f°".format(temp)
-                                    hum != null -> "%.0f%%".format(hum)
+                                 //   hum != null -> "%.0f%%".format(hum)
                                     else -> null
                                 }
                                 Triple("\u26C5", envStr, "environment")

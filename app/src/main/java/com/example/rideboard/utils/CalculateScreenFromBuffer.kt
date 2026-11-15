@@ -18,19 +18,23 @@ import kotlin.math.sqrt
 
 fun calculateScreenValues(buffer: GpsBuffer,
 ): ScreenValues {
-    val point = buffer.getNthBeforeLast(2) ?: return ScreenValues()
-    val lastPoint = buffer.getNthBeforeLast(1) ?: return ScreenValues()
+    val previousPoint = buffer.getNthBeforeLast(3)?.copy() ?: return ScreenValues()
+    val point = buffer.getNthBeforeLast(2)?.copy() ?: return ScreenValues()
+    val lastPoint = buffer.getNthBeforeLast(1)?.copy() ?: return ScreenValues()
     return ScreenValues(
+        /*
         screenValueDouble1 = point.gpsPointScreenValueDouble1,
         screenValueDouble2 = point.gpsPointScreenValueDouble2,
         screenValueDouble3 = point.gpsPointScreenValueDouble3,
         screenValueLong = point.gpsPointScreenValueLong,
-        screenValueString = point.gpsPointScreenValueString,
         screenValueString2 = point.gpsPointScreenValueString2,
         screenValueString3 = point.gpsPointScreenValueString3,
         screenValueString4 = point.gpsPointScreenValueString4,
         screenValueBoolean = point.gpsPointScreenValueBoolean,
         screenValueInt = point.gpsPointScreenValueInt,
+
+         */
+        screenValueString = point.gpsPointScreenValueString,
         isStarted = point.gpsPointIsStarted,
         cumulatedGpsPrecision = point.gpsPointCumulatedGpsPrecision,
         acceleration = point.gpsPointAcceleration,
@@ -125,25 +129,32 @@ fun calculateScreenValues(buffer: GpsBuffer,
         minAltitude = point.gpsPointMinAltitude,
         maxAltitude = point.gpsPointMaxAltitude,
 
-        power = (lastPoint.power)?:point.power,
-        powerPercentRightLeft = (lastPoint.powerPercentRightLeft)?:point.powerPercentRightLeft,
-        powerTorque = (lastPoint.powerTorque)?:point.powerTorque,
-        powerCadence = (lastPoint.powerCadence)?:point.powerCadence,
-        pedalSmoothnessRight = (lastPoint.pedalSmoothnessRight)?:point.pedalSmoothnessRight,
-        pedalSmoothnessLeft = (lastPoint.pedalSmoothnessLeft)?:point.pedalSmoothnessLeft,
-        torqueEffectivenessRight = (lastPoint.torqueEffectivenessRight)?:point.torqueEffectivenessRight,
-        torqueEffectivenessLeft = (lastPoint.torqueEffectivenessLeft)?:point.torqueEffectivenessLeft,
-        powerBattery = (lastPoint.powerBattery)?:point.powerBattery,
+        power = ((lastPoint.power)?:point.power)?:previousPoint.power,
+        smoothedPowerPercentRightLeft = (point.smoothedPowerPercentRightLeft)?:previousPoint.smoothedPowerPercentRightLeft,
+        maxPowerTorque = point.maxPowerTorque,
+        //pedalSmoothnessRight = (lastPoint.pedalSmoothnessRight)?:point.pedalSmoothnessRight,
+        //pedalSmoothnessLeft = (lastPoint.pedalSmoothnessLeft)?:point.pedalSmoothnessLeft,
+        //torqueEffectivenessRight = (lastPoint.torqueEffectivenessRight)?:point.torqueEffectivenessRight,
+        //torqueEffectivenessLeft = (lastPoint.torqueEffectivenessLeft)?:point.torqueEffectivenessLeft,
+        powerBattery = ((lastPoint.powerBattery)?:point.powerBattery)?:previousPoint.powerBattery,
+        averagePowerTorque = if (point.durationForPowerTorqueAverage == 0L ) null else ((point.totalForPowerTorqueAverage)?:0.0)/point.durationForPowerTorqueAverage,
+        totalPower = point.totalPower,
 
-        outTemperature = (lastPoint.outTemperature)?:point.outTemperature,
-        outHumidity = (lastPoint.outHumidity)?:point.outHumidity,
+        outTemperature = ((lastPoint.outTemperature)?:point.outTemperature)?:previousPoint.outTemperature,
+        outHumidity = ((lastPoint.outHumidity)?:point.outHumidity)?:previousPoint.outHumidity,
+        maxOutTemperature = point.maxOutTemperature,
+        minOutTemperature = point.minOutTemperature,
+        environmentBattery = ((lastPoint.environmentBattery)?:point.environmentBattery)?:previousPoint.environmentBattery,
 
-        cadence = if(lastPoint.cadence != null || point.cadence != null) (lastPoint.cadence)?:point.cadence
-        else if (lastPoint.powerCadence != null || point.powerCadence != null) ((lastPoint.powerCadence)?:point.powerCadence)!!.toInt()
+        cadence = if(lastPoint.cadence != null || point.cadence != null || previousPoint.cadence != null) ((lastPoint.cadence)?:point.cadence)?:previousPoint.cadence
+        else if (point.powerCadence != null || previousPoint.powerCadence != null)  ((point.powerCadence)?:previousPoint.powerCadence)!!.toInt()
         else null,
-
-        heartRate = lastPoint.heartRate?.toDouble(),
+        maxCadence = point.maxCadence,
+        averageCadence = if (point.timeForAverageCadence == 0L ) null else (60.0 * point.totalRevolutionsForAverage/((point.timeForAverageCadence).toFloat())).toFloat(),
+        totalRevolutions = (point.totalRevolutions).toInt(),
+        heartRate = ((lastPoint.heartRate)?:point.heartRate)?.toDouble(),
         correctedHeartRate = point.correctedHeartRate,
+        heartRateBattery = point.heartRateBattery,
         minHR = point.minHR,
         maxHR = point.maxHR,
         durationHRZ2 = point.durationHRZ2.toInt(),
@@ -151,8 +162,8 @@ fun calculateScreenValues(buffer: GpsBuffer,
         durationHRZ4 = point.durationHRZ4.toInt(),
         durationHRZ3 = point.durationHRZ3.toInt(),
         avgHR = if(point.durationHR != 0L) point.totHRForAvg/point.durationHR.toDouble() else 0.0,
-
-    )
+        avgOutTemperature = if(point.durationForAverageTemperature == 0L) null else (point.totalForAverageTemperature?:0f)/point.durationForAverageTemperature.toFloat(),
+        )
 
 
     /*

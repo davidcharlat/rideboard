@@ -82,7 +82,7 @@ class MainActivity : ComponentActivity() {
         AppConfig.repository = repository
         AppConfig.providers = providers
         AppConfig.altitudeManager = altitudeManager
-        AppConfig.sensorManager = CyclingSensorManager(applicationContext)
+        AppConfig.sensorManager = AppConfig.sensorManager ?: CyclingSensorManager(applicationContext)
 
         // --- Vérification des permissions
         checkAndRequestPermissions()

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.ui.computeFontSize
 import com.example.rideboard.ui.formatDuration
 import com.example.rideboard.utils.ScreenValues
@@ -404,7 +404,7 @@ private fun PowerViewScreen1(
 
                     Button(
                         onClick = {
-                            com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset =
+                            GpsBuffer.getLast()?.gpsPointStringToReset =
                                 "MaxPower1000"
                         },
                         modifier = Modifier.size(20.dp),
@@ -437,13 +437,13 @@ private fun PowerViewScreen1(
                     ) {
                         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint = "Z2: " + formatDuration((screenValues.durationPowerZ2 / 1000).toInt())
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
+                        val textToPrint = "Z2: " + formatDuration((screenValues.durationPowerZ2).toInt())
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
                             values = listOf(textToPrint),
-                            availableWidthPx = max(0.5f, availableWidthPx - 100),
+                            availableWidthPx = max(0.7f, availableWidthPx - 50),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
                         )
@@ -486,13 +486,13 @@ private fun PowerViewScreen1(
                     ) {
                         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint = "Z3: " + formatDuration((screenValues.durationPowerZ3 / 1000).toInt())
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
+                        val textToPrint = "Z3: " + formatDuration((screenValues.durationPowerZ3).toInt())
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
                             values = listOf(textToPrint),
-                            availableWidthPx = max(0.5f, availableWidthPx - 100),
+                            availableWidthPx = max(0.7f, availableWidthPx - 50),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
                         )
@@ -535,13 +535,13 @@ private fun PowerViewScreen1(
                     ) {
                         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint = "Z4: " + formatDuration((screenValues.durationPowerZ4 / 1000).toInt())
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
+                        val textToPrint = "Z4: " + formatDuration((screenValues.durationPowerZ4).toInt())
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
                             values = listOf(textToPrint),
-                            availableWidthPx = max(0.5f, availableWidthPx - 100),
+                            availableWidthPx = max(0.7f, availableWidthPx - 50),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
                         )
@@ -584,13 +584,13 @@ private fun PowerViewScreen1(
                     ) {
                         val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                         val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.6f).toSp() }
-                        val textToPrint = "Z5: " + formatDuration((screenValues.durationPowerZ5 / 1000).toInt())
+                        val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
+                        val textToPrint = "Z5: " + formatDuration((screenValues.durationPowerZ5).toInt())
 
                         val valueFont = computeFontSize(
                             textMeasurer = textMeasurer,
                             values = listOf(textToPrint),
-                            availableWidthPx = max(0.5f, availableWidthPx - 100),
+                            availableWidthPx = max(0.7f, availableWidthPx - 50),
                             maxFontSize = maxValueFont,
                             minFontSize = 8.sp
                         )
@@ -607,8 +607,7 @@ private fun PowerViewScreen1(
 
                     Button(
                         onClick = {
-                            com.example.rideboard.buffer.GpsBuffer.getLast()?.gpsPointStringToReset =
-                                "DurationPowerZ5"
+                            GpsBuffer.getLast()?.gpsPointStringToReset = "DurationPowerZ5"
                         },
                         modifier = Modifier.size(20.dp),
                         contentPadding = PaddingValues(0.dp),
@@ -647,7 +646,7 @@ private fun PowerViewScreen2(
         ) {
             val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
             val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-            val textToPrint = "Puissance: ${screenValues.power ?: "--"} W"
+            val textToPrint = "Power: ${screenValues.power ?: "--"} W"
 
             val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.7f).toSp() }
             val valueFont = computeFontSize(
@@ -680,8 +679,269 @@ private fun PowerViewScreen2(
             }
         }
 
-        // Ligne 2: pedalSmoothness (Left / Right) - 2 cases
+        // Ligne 2: powerCadence
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+            val cadence = screenValues.cadence
+            val textToPrint = "Cadence: ${cadence?.let { "%d rpm".format(it) } ?: "--"}"
+
+            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(textToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Text(
+                text = textToPrint,
+                color = Color.White,
+                fontSize = valueFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        //ligne 2 bis avg et  max cadence
         Row(
+            modifier = Modifier
+                .weight(0.5f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            // Moitié gauche : avgCadence
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                val buttonSpace = 28.dp
+
+                val availableWidthPx = with(LocalDensity.current) { (maxWidth - buttonSpace).toPx() }
+                val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                val textToPrint = if (screenValues.averageCadence == null) " " else " avg: %.1f  ".format(screenValues.averageCadence)
+
+                val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+
+                val valueFont = computeFontSize(
+                    textMeasurer = textMeasurer,
+                    values = listOf(textToPrint),
+                    availableWidthPx = availableWidthPx,
+                    maxFontSize = maxValueFont,
+                    minFontSize = 8.sp
+                )
+
+                Text(
+                    text = textToPrint,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = buttonSpace),
+                    color = Color.Yellow,
+                    fontSize = valueFont,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+
+                Button(
+                    onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "AverageCadence" },
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.CenterStart),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) {
+                    Text("0")
+                }
+            }
+
+            // Moitié droite : maxCadence
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                val buttonSpace = 28.dp
+
+                val availableWidthPx = with(LocalDensity.current) { (maxWidth - buttonSpace).toPx() }
+                val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+                val textToPrint = if (screenValues.maxCadence == null) " " else "  max: ${screenValues.maxCadence}  "
+
+                val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+
+                val valueFont = computeFontSize(
+                    textMeasurer = textMeasurer,
+                    values = listOf(textToPrint),
+                    availableWidthPx = availableWidthPx,
+                    maxFontSize = maxValueFont,
+                    minFontSize = 8.sp
+                )
+
+                Text(
+                    text = textToPrint,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = buttonSpace),
+                    color = Color.Yellow,
+                    fontSize = valueFont,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+
+                Button(
+                    onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "MaxCadence" },
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.CenterEnd),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) {
+                    Text("0")
+                }
+            }
+        }
+
+        // Ligne 2 ter: powerCadence
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(0.5f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+            val textToPrint = " ${screenValues.totalRevolutions} tours de pédales "
+
+            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(textToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Text(
+                text = textToPrint,
+                color = Color.White,
+                fontSize = valueFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+            Button(
+                onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "TotalRevolutions" },
+                modifier = Modifier
+                    .size(20.dp)
+                    .align(Alignment.CenterEnd),
+                contentPadding = PaddingValues(0.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+            ) {
+                Text("0")
+            }
+        }
+
+
+        /*BoxWithConstraints(
+            modifier = Modifier
+                .weight(0.5f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            val buttonSize = 20.dp
+            val buttonSpace = 28.dp // 20 dp pour le bouton + marge éventuelle
+
+            val availableWidthPx = with(LocalDensity.current) { (maxWidth - buttonSpace).toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+            val textToPrint =
+                if (screenValues.maxCadence == null) " "
+                else "max: ${screenValues.maxCadence}"
+
+            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(textToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Text(
+                text = textToPrint,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = buttonSpace)
+                    .align(Alignment.Center),
+                color = Color.Yellow,
+                fontSize = valueFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+
+            Button(
+                onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "MaxCadence" },
+                modifier = Modifier
+                    .size(buttonSize)
+                    .align(Alignment.CenterEnd),
+                contentPadding = PaddingValues(0.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+            ) {
+                Text("0")
+            }
+        }*/
+
+
+        // Ligne 3: powerBalance
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+            val textToPrint = screenValues.smoothedPowerPercentRightLeft?.let {
+                val gauche = it / 2.0
+                "%.1f %%  balance G/D %.1f %%".format(gauche, 100.0 - gauche)
+            } ?: " "
+            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(textToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Text(
+                text = textToPrint,
+                color = Color.White,
+                fontSize = valueFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        // Ligne 4: pedalSmoothness (Left / Right) - 2 cases
+        /*Row(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -696,7 +956,7 @@ private fun PowerViewScreen2(
             ) {
                 val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                 val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                val textToPrint = "Fluidité G: ${screenValues.pedalSmoothnessLeft?.let { "%.1f %%".format(it) } ?: "--"}"
+                val textToPrint = if (screenValues.pedalSmoothnessLeft == null) " " else "Fluidité G: ${screenValues.pedalSmoothnessLeft.let { "%.0f %%".format(it) }}"
                 val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
 
                 val valueFont = computeFontSize(
@@ -725,7 +985,7 @@ private fun PowerViewScreen2(
             ) {
                 val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
                 val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                val textToPrint = "Fluidité D: ${screenValues.pedalSmoothnessRight?.let { "%.1f %%".format(it) } ?: "--"}"
+                val textToPrint = if (screenValues.pedalSmoothnessRight == null) " " else "Fluidité D: ${screenValues.pedalSmoothnessRight.let { "%.0f %%".format(it) }}"
                 val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
 
                 val valueFont = computeFontSize(
@@ -748,22 +1008,67 @@ private fun PowerViewScreen2(
         }
 
         // Ligne 3: torqueEffectiveness (Left / Right) - 2 cases
+        */
+
+        //couple
+
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+            val value = run {
+                var cadence = if (screenValues.cadence == null) null else (screenValues.cadence).toFloat()
+                if (cadence != null) cadence = max(10f,cadence)
+                if (screenValues.power == null || cadence == null) null else screenValues.power.toDouble() * 9.6 / cadence.toDouble()  // *9.6 +-= *60/Pi
+            }
+            val textToPrint =if (value == null) " " else "Couple: ${value.let { "%.1f N.m".format(it) }}"
+
+            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
+            val valueFont = computeFontSize(
+                textMeasurer = textMeasurer,
+                values = listOf(textToPrint),
+                availableWidthPx = availableWidthPx,
+                maxFontSize = maxValueFont,
+                minFontSize = 8.sp
+            )
+
+            Text(
+                text = textToPrint,
+                color = Color.White,
+                fontSize = valueFont,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        }
+
+
+
+        // Ligne 4 bis : avg et maxpowerTorque
         Row(
             modifier = Modifier
-                .weight(1f)
+                .weight(0.5f)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
+            // Moitié gauche : avgTorque
             BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                val buttonSpace = 28.dp
+
+                val availableWidthPx = with(LocalDensity.current) { (maxWidth - buttonSpace).toPx() }
                 val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                val textToPrint = "Efficacité G: ${screenValues.torqueEffectivenessLeft?.let { "%.1f %%".format(it) } ?: "--"}"
+
+                val textToPrint = if (screenValues.averagePowerTorque == null) " " else " avg: %.1f  ".format(screenValues.averagePowerTorque)
+
                 val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
 
                 val valueFont = computeFontSize(
@@ -776,23 +1081,41 @@ private fun PowerViewScreen2(
 
                 Text(
                     text = textToPrint,
-                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = buttonSpace),
+                    color = Color.Yellow,
                     fontSize = valueFont,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
+
+                Button(
+                    onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "AveragePowerTorque" },
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.CenterStart),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) {
+                    Text("0")
+                }
             }
 
+            // Moitié droite : maxTorque
             BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
+                val buttonSpace = 28.dp
+
+                val availableWidthPx = with(LocalDensity.current) { (maxWidth - buttonSpace).toPx() }
                 val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-                val textToPrint = "Efficacité D: ${screenValues.torqueEffectivenessRight?.let { "%.1f %%".format(it) } ?: "--"}"
+
+                val textToPrint = if (screenValues.maxPowerTorque == null) " " else " avg: %.1f  ".format(screenValues.maxPowerTorque)
+
                 val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
 
                 val valueFont = computeFontSize(
@@ -805,26 +1128,47 @@ private fun PowerViewScreen2(
 
                 Text(
                     text = textToPrint,
-                    color = Color.White,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = buttonSpace),
+                    color = Color.Yellow,
                     fontSize = valueFont,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
+
+                Button(
+                    onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "MaxPowerTorque" },
+                    modifier = Modifier
+                        .size(20.dp)
+                        .align(Alignment.CenterEnd),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = CircleShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+                ) {
+                    Text("0")
+                }
             }
         }
 
-        // Ligne 4: powerCadence
+        //energie dépensée
         BoxWithConstraints(
             modifier = Modifier
-                .weight(1f)
+                .weight(0.5f)
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center
+                .padding(horizontal = 8.dp, vertical = 4.dp)
         ) {
-            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
-            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-            val textToPrint = "Cadence Pédales: ${screenValues.powerCadence?.let { "%.0f rpm".format(it) } ?: "--"}"
+            val buttonSize = 20.dp
+            val buttonSpace = 28.dp // 20 dp pour le bouton + marge éventuelle
+
+            val availableWidthPx = with(LocalDensity.current) {
+                (maxWidth - buttonSpace).toPx()
+            }
+            val availableHeightPx = with(LocalDensity.current) {
+                maxHeight.toPx()
+            }
+            val textToPrint =" Energie dépensée ${screenValues.totalPower / 1000} Kj "
 
             val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
             val valueFont = computeFontSize(
@@ -837,43 +1181,28 @@ private fun PowerViewScreen2(
 
             Text(
                 text = textToPrint,
-                color = Color.White,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = buttonSpace)
+                    .align(Alignment.Center),
+                color = Color.Yellow,
                 fontSize = valueFont,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center
             )
-        }
 
-        // Ligne 5: powerTorque
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            val availableWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
-            val availableHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
-            val textToPrint = "Couple: ${screenValues.powerTorque?.let { "%.1f N.m".format(it) } ?: "--"}"
-
-            val maxValueFont = with(LocalDensity.current) { (availableHeightPx * 0.65f).toSp() }
-            val valueFont = computeFontSize(
-                textMeasurer = textMeasurer,
-                values = listOf(textToPrint),
-                availableWidthPx = availableWidthPx,
-                maxFontSize = maxValueFont,
-                minFontSize = 8.sp
-            )
-
-            Text(
-                text = textToPrint,
-                color = Color.White,
-                fontSize = valueFont,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center
-            )
+            Button(
+                onClick = { GpsBuffer.getLast()?.gpsPointStringToReset = "TotalPower" },
+                modifier = Modifier
+                    .size(buttonSize)
+                    .align(Alignment.CenterEnd),
+                contentPadding = PaddingValues(0.dp),
+                shape = CircleShape,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFBF5700))
+            ) {
+                Text("0")
+            }
         }
     }
 }

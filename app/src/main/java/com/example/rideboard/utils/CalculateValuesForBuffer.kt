@@ -154,6 +154,19 @@ data class AccuracyOfCoordinates(
         val previousDurationPowerZ3 = if (latestGpsPoint.gpsPointStringToReset == "DurationPowerZ3" || newGpsPoint.gpsPointStringToReset == "DurationPowerZ3") 0 else previousGpsPoint.durationPowerZ3
         val previousDurationPowerZ4 = if (latestGpsPoint.gpsPointStringToReset == "DurationPowerZ4" || newGpsPoint.gpsPointStringToReset == "DurationPowerZ4") 0 else previousGpsPoint.durationPowerZ4
         val previousDurationPowerZ5 = if (latestGpsPoint.gpsPointStringToReset == "DurationPowerZ5" || newGpsPoint.gpsPointStringToReset == "DurationPowerZ5") 0 else previousGpsPoint.durationPowerZ5
+        val previousSmoothedPowerPercentRightLeft = previousGpsPoint.smoothedPowerPercentRightLeft
+        val previousMaxPowerTorque = if (latestGpsPoint.gpsPointStringToReset == "MaxPowerTorque" || newGpsPoint.gpsPointStringToReset == "MaxPowerTorque") null else previousGpsPoint.maxPowerTorque
+        val previousMaxOutTemperature = if (latestGpsPoint.gpsPointStringToReset == "MaxOutTemperature" || newGpsPoint.gpsPointStringToReset == "MaxOutTemperature") null else previousGpsPoint.maxOutTemperature
+        val previousMinOutTemperature = if (latestGpsPoint.gpsPointStringToReset == "MinOutTemperature" || newGpsPoint.gpsPointStringToReset == "MinOutTemperature") null else previousGpsPoint.minOutTemperature
+        val previousMaxCadence = if (latestGpsPoint.gpsPointStringToReset == "MaxCadence" || newGpsPoint.gpsPointStringToReset == "MaxCadence") null else previousGpsPoint.maxCadence
+        val previousDurationForPowerTorqueAverage = if (latestGpsPoint.gpsPointStringToReset == "AveragePowerTorque" || newGpsPoint.gpsPointStringToReset == "AveragePowerTorque") 0L else previousGpsPoint.durationForPowerTorqueAverage
+        val previousTotalForPowerTorqueAverage = if (latestGpsPoint.gpsPointStringToReset == "AveragePowerTorque" || newGpsPoint.gpsPointStringToReset == "AveragePowerTorque") 0.0 else previousGpsPoint.totalForPowerTorqueAverage
+        val previousTotalRevolutions = if (latestGpsPoint.gpsPointStringToReset == "TotalRevolutions" || newGpsPoint.gpsPointStringToReset == "TotalRevolutions") 0.0 else previousGpsPoint.totalRevolutions
+        val previousTotalRevolutionsForAverage = if (latestGpsPoint.gpsPointStringToReset == "AverageCadence" || newGpsPoint.gpsPointStringToReset == "AverageCadence") 0.0 else previousGpsPoint.totalRevolutionsForAverage
+        val previousTimeForAverageCadence = if (latestGpsPoint.gpsPointStringToReset == "AverageCadence" || newGpsPoint.gpsPointStringToReset == "AverageCadence") 0L else previousGpsPoint.timeForAverageCadence
+        val previousTotalForAverageTemperature = if (latestGpsPoint.gpsPointStringToReset == "AverageTemperature" || newGpsPoint.gpsPointStringToReset == "AverageTemperature") 0f else previousGpsPoint.totalForAverageTemperature
+        val previousDurationForAverageTemperature = if (latestGpsPoint.gpsPointStringToReset == "AverageTemperature" || newGpsPoint.gpsPointStringToReset == "AverageTemperature") 0L else previousGpsPoint.durationForAverageTemperature
+        val previousTotalPower = if (latestGpsPoint.gpsPointStringToReset == "TotalPower" || newGpsPoint.gpsPointStringToReset == "TotalPower") 0 else previousGpsPoint.totalPower
 
         if (buffer.size == 3 || (previousGpsPointDurationTime < 100 && previousGpsPointTotalDistance == 0.0)) {
             val rideFile = File(context.filesDir, "ride.tsv")
@@ -338,11 +351,23 @@ data class AccuracyOfCoordinates(
             sample.screenPower125 = previousScreenPower125 * (124.0/125.0).pow(deltaTimeInSecond)
             sample.screenPower1000 = previousScreenPower1000 * (999.0/1000.0).pow(deltaTimeInSecond)
             sample.totalPowerForAveragePower = previousTotalPowerForAveragePower
+            sample.totalPower = previousTotalPower
             sample.durationForAveragePower = previousDurationForAveragePower
             sample.durationPowerZ2 = previousDurationPowerZ2
             sample.durationPowerZ3 = previousDurationPowerZ3
             sample.durationPowerZ4 = previousDurationPowerZ4
             sample.durationPowerZ5 = previousDurationPowerZ5
+            sample.durationForPowerTorqueAverage = previousDurationForPowerTorqueAverage
+            sample.totalForPowerTorqueAverage = previousTotalForPowerTorqueAverage
+            sample.maxOutTemperature = previousMaxOutTemperature
+            sample.maxPowerTorque = previousMaxPowerTorque
+            sample.maxCadence = previousMaxCadence
+            sample.minOutTemperature = previousMinOutTemperature
+            sample.totalRevolutions = previousTotalRevolutions
+            sample.totalRevolutionsForAverage =  previousTotalRevolutionsForAverage
+            sample.timeForAverageCadence = previousTimeForAverageCadence
+            sample.durationForAverageTemperature = previousDurationForAverageTemperature
+            sample.totalForAverageTemperature = previousTotalForAverageTemperature
 
             return
         }
@@ -565,13 +590,26 @@ data class AccuracyOfCoordinates(
                 if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
                 else previousScreenPower1000 * kept.pow(1.0/3.0) }
         sample.totalPowerForAveragePower = previousTotalPowerForAveragePower
+            sample.totalPower = previousTotalPower
         sample.durationForAveragePower = previousDurationForAveragePower
         sample.durationPowerZ2 = previousDurationPowerZ2
         sample.durationPowerZ3 = previousDurationPowerZ3
         sample.durationPowerZ4 = previousDurationPowerZ4
         sample.durationPowerZ5 = previousDurationPowerZ5
+            sample.maxOutTemperature = maxOrNull(previousMaxOutTemperature, previousGpsPoint.outTemperature)
+            sample.maxPowerTorque = previousMaxPowerTorque
+            sample.maxCadence = previousMaxCadence
+            sample.minOutTemperature = minOrNull(previousMinOutTemperature, previousGpsPoint.outTemperature)
+            sample.durationForPowerTorqueAverage = previousDurationForPowerTorqueAverage
+            sample.totalForPowerTorqueAverage = previousTotalForPowerTorqueAverage
+            sample.totalRevolutions = previousTotalRevolutions
+            sample.totalRevolutionsForAverage =  previousTotalRevolutionsForAverage
+            sample.timeForAverageCadence = previousTimeForAverageCadence
+            sample.durationForAverageTemperature = if (sample.outTemperature != null) previousDurationForAverageTemperature + durationTimeIntInSec else previousDurationForAverageTemperature
+            sample.totalForAverageTemperature = if (sample.outTemperature != null) (previousTotalForAverageTemperature?:0f) + durationTimeIntInSec.toFloat() * (sample.outTemperature?:0f) else previousTotalForAverageTemperature
 
-        return
+
+            return
     }
 if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latitude == latestGpsPoint.latitude
 && newGpsPoint.longitude == previousGpsPoint.longitude && latestGpsPoint.longitude == previousGpsPoint.longitude)
@@ -659,13 +697,25 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
         if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
         else previousScreenPower1000 * kept.pow(1.0/3.0) }
         sample.totalPowerForAveragePower = previousTotalPowerForAveragePower
+        sample.totalPower = previousTotalPower
         sample.durationForAveragePower = previousDurationForAveragePower
         sample.durationPowerZ2 = previousDurationPowerZ2
         sample.durationPowerZ3 = previousDurationPowerZ3
         sample.durationPowerZ4 = previousDurationPowerZ4
         sample.durationPowerZ5 = previousDurationPowerZ5
+    sample.maxOutTemperature = maxOrNull(previousMaxOutTemperature, previousGpsPoint.outTemperature)
+    sample.maxPowerTorque = previousMaxPowerTorque
+    sample.maxCadence = previousMaxCadence
+    sample.minOutTemperature = minOrNull(previousMinOutTemperature, previousGpsPoint.outTemperature)
+    sample.durationForPowerTorqueAverage = previousDurationForPowerTorqueAverage
+    sample.totalForPowerTorqueAverage = previousTotalForPowerTorqueAverage
+    sample.totalRevolutions = previousTotalRevolutions
+    sample.totalRevolutionsForAverage =  previousTotalRevolutionsForAverage
+    sample.timeForAverageCadence = previousTimeForAverageCadence
+    sample.durationForAverageTemperature = if (sample.outTemperature != null) previousDurationForAverageTemperature + durationTimeIntInSec else previousDurationForAverageTemperature
+    sample.totalForAverageTemperature = if (sample.outTemperature != null) (previousTotalForAverageTemperature?:0f) + durationTimeIntInSec.toFloat() * (sample.outTemperature?:0f) else previousTotalForAverageTemperature
 
-        return
+    return
     }
 
     //val newIsMoving = true
@@ -843,6 +893,17 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
     bufferSnapshot[max(0,bufferSnapshot.size - 4)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
     bufferSnapshot[max(0,bufferSnapshot.size - 3)].gpsPointDisplayedVerticalSpeed2 / 7.0 +
     previousDisplayedVerticalSpeed2/7.0 + newDisplayedVerticalSpeed2 /7.0
+        val torque = run {
+            var cadence = if (previousGpsPoint.powerCadence == null && previousGpsPoint.cadence == null) null
+                else previousGpsPoint.powerCadence?:((previousGpsPoint.cadence)!!.toFloat())
+            if (cadence != null) cadence = max(cadence,10f)
+            if (previousGpsPoint.power == null || cadence == null) null else (previousGpsPoint.power)!!.toDouble() * 9.6 / cadence.toDouble()  // *9.6 +-= *60/Pi
+        }
+val powerCadence = if (sample.power == 0
+    && ((sample.powerCadence?:previousGpsPoint.powerCadence) == previousGpsPoint.powerCadence
+            ||previousGpsPoint.powerCadence==0f||newGpsPoint.powerCadence==0f))
+    0f
+else sample.powerCadence
 
         if (IS_RINGING && !previousIsMoving) {playSimpleBeep()}//sonnerie
 
@@ -927,36 +988,57 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
     sample.maxHR = if ((newCorrectedHeartRate?:0) > 0 && previousMaxHR != null) max(newCorrectedHeartRate!!, previousMaxHR) else if(previousMaxHR == null && newCorrectedHeartRate != null) newCorrectedHeartRate else previousMaxHR
     sample.totHRForAvg = if ((newCorrectedHeartRate?:0) > 0) previousTotHRForAvg + newCorrectedHeartRate!!*durationTimeIntInSec else previousTotHRForAvg
     sample.correctedHeartRate = newCorrectedHeartRate
-        sample.screenPower4 = run{
+    sample.screenPower4 = run{
             val kept = (3.0/4.0).pow(deltaTimeInSecond)
             if (actualPower != null) previousScreenPower4 * kept + actualPower.toDouble() * (1.0-kept)
             else previousScreenPower4 * kept.pow(1.0/3.0) }
     sample.maxScreenPower4 = max(previousMaxScreenPower4,sample.screenPower4)
-        sample.screenPower15 = run{
+    sample.screenPower15 = run{
             val kept = (14.0/15.0).pow(deltaTimeInSecond)
             if (actualPower != null) previousScreenPower15 * kept + actualPower.toDouble() * (1.0-kept)
             else previousScreenPower15 * kept.pow(1.0/3.0) }
-        sample.maxScreenPower15 = max(previousMaxScreenPower15,sample.screenPower15)
-        sample.screenPower125 = run{
+    sample.maxScreenPower15 = max(previousMaxScreenPower15,sample.screenPower15)
+    sample.screenPower125 = run{
             val kept = (124.0/125.0).pow(deltaTimeInSecond)
             if (actualPower != null) previousScreenPower125 * kept + actualPower.toDouble() * (1.0-kept)
             else previousScreenPower125 * kept.pow(1.0/3.0) }
-        sample.maxScreenPower125 = max(previousMaxScreenPower125,sample.screenPower125)
-        sample.screenPower1000 = run{
+    sample.maxScreenPower125 = max(previousMaxScreenPower125,sample.screenPower125)
+    sample.screenPower1000 = run{
             val kept = (999.0/1000.0).pow(deltaTimeInSecond)
             if (actualPower != null) previousScreenPower1000 * kept + actualPower.toDouble() * (1.0-kept)
             else previousScreenPower1000 * kept.pow(1.0/3.0) }
-        sample.maxScreenPower1000 = max(previousMaxScreenPower1000,sample.screenPower1000)
-        sample.totalPowerForAveragePower = if (newSpeed>SPEED_FOR_AVERAGE_POWER) previousTotalPowerForAveragePower + durationTimeIntInSec * (actualPower?:0)
+    sample.maxScreenPower1000 = max(previousMaxScreenPower1000,sample.screenPower1000)
+    sample.totalPowerForAveragePower = if (newSpeed>SPEED_FOR_AVERAGE_POWER) previousTotalPowerForAveragePower + durationTimeIntInSec * (actualPower?:0)
         else previousTotalPowerForAveragePower
-        sample.durationForAveragePower = if (newSpeed>SPEED_FOR_AVERAGE_POWER) previousDurationForAveragePower + durationTimeIntInSec else previousDurationForAveragePower
-        sample.durationPowerZ2 = if (actualPower != null && actualPower >= POWER_ZONE_2 && actualPower < POWER_ZONE_3) previousDurationPowerZ2 + durationTimeIntInSec else previousDurationPowerZ2
+        sample.totalPower = previousTotalPower + durationTimeIntInSec.toInt() * (actualPower?:0)
+    sample.durationForAveragePower = if (newSpeed>SPEED_FOR_AVERAGE_POWER && actualPower != null) previousDurationForAveragePower + durationTimeIntInSec else previousDurationForAveragePower
+    sample.durationPowerZ2 = if (actualPower != null && actualPower >= POWER_ZONE_2 && actualPower < POWER_ZONE_3) previousDurationPowerZ2 + durationTimeIntInSec else previousDurationPowerZ2
         sample.durationPowerZ3 = if (actualPower != null && actualPower >= POWER_ZONE_3 && actualPower < POWER_ZONE_4) previousDurationPowerZ3 + durationTimeIntInSec else previousDurationPowerZ3
         sample.durationPowerZ4 = if (actualPower != null && actualPower >= POWER_ZONE_4 && actualPower < POWER_ZONE_5) previousDurationPowerZ4 + durationTimeIntInSec else previousDurationPowerZ4
         sample.durationPowerZ5 = if (actualPower != null && actualPower >= POWER_ZONE_5) previousDurationPowerZ5 + durationTimeIntInSec else previousDurationPowerZ5
+        sample.smoothedPowerPercentRightLeft = run { val actualValue = (((latestGpsPoint.powerPercentRightLeft)?:(newGpsPoint.powerPercentRightLeft))?:(previousGpsPoint.powerPercentRightLeft))?.toFloat()
+            val result = if (previousSmoothedPowerPercentRightLeft == null ||  actualValue== null) actualValue
+            else (previousSmoothedPowerPercentRightLeft * 0.96f + actualValue * 0.04f)
+            result
+        }
+        sample.maxOutTemperature = maxOrNull(previousMaxOutTemperature, previousGpsPoint.outTemperature)
+        sample.maxPowerTorque = if(previousMaxPowerTorque == null && torque == null) null
+            else max((previousMaxPowerTorque?:torque)!!,(torque?:previousMaxPowerTorque)!!)
+        sample.maxCadence = if (previousMaxCadence == null &&  newGpsPoint.cadence == null && newGpsPoint.powerCadence == null) null
+            else max ((previousMaxCadence?:((newGpsPoint.cadence)?:(newGpsPoint.powerCadence)))!!.toInt(),(((newGpsPoint.cadence)?:(newGpsPoint.powerCadence))?:previousMaxCadence)!!.toInt())
+        sample.minOutTemperature = minOrNull(previousMinOutTemperature, previousGpsPoint.outTemperature)
+        sample.powerCadence = powerCadence
+        //sample.cadence = if ((sample.cadence?: 0)  == 0) sample.powerCadence?.toInt() else sample.cadence
+        sample.durationForPowerTorqueAverage = if (torque != null && torque > 0.0) previousDurationForPowerTorqueAverage + durationTimeIntInSec else previousDurationForPowerTorqueAverage
+        sample.totalForPowerTorqueAverage = if (torque != null && torque > 0.0) (previousTotalForPowerTorqueAverage?:0.0) + durationTimeIntInSec * torque else previousTotalForPowerTorqueAverage
+        sample.totalRevolutions = previousTotalRevolutions + ((sample.cadence)?:((sample.powerCadence)?:0)).toDouble() * min(deltaTimeInSecond, 4.0)/60.0
+        sample.totalRevolutionsForAverage =  previousTotalRevolutionsForAverage + ((sample.cadence)?:((sample.powerCadence)?:0)).toDouble() * min(deltaTimeInSecond, 4.0)/60.0
+        sample.timeForAverageCadence = previousTimeForAverageCadence + if(((sample.cadence)?:(powerCadence?:0).toInt()) != 0) durationTimeIntInSec else 0L
+        sample.durationForAverageTemperature = if (sample.outTemperature != null) previousDurationForAverageTemperature + durationTimeIntInSec else previousDurationForAverageTemperature
+        sample.totalForAverageTemperature = if (sample.outTemperature != null) (previousTotalForAverageTemperature?:0f) + durationTimeIntInSec.toFloat() * (sample.outTemperature?:0f) else previousTotalForAverageTemperature
 
 
-    FitExporter.fileTsvFile(context,File(context.filesDir, "ride.tsv"),newGpsPoint.timestamp,
+        FitExporter.fileTsvFile(context,File(context.filesDir, "ride.tsv"),newGpsPoint.timestamp,
         listOf (
             newGpsPoint.gpsPointLatitude,
             newGpsPoint.gpsPointLongitude,
@@ -970,29 +1052,19 @@ if ((newGpsPoint.latitude == previousGpsPoint.latitude && previousGpsPoint.latit
             if (((newGpsPoint.cadence)?:newGpsPoint.powerCadence) != null) (((newGpsPoint.cadence)?:newGpsPoint.powerCadence)!!.toDouble()) else null,
             if (newGpsPoint.outTemperature != null) (newGpsPoint.outTemperature!!.toDouble()) else null) as List<Double?>
     )
-    //cr    eation du fichier gps_debug.txt
+    //creation du fichier gps_debug.txt
 
     appendDebugLog(
         context,
         "\t${newGpsPoint.accuracy}" +
-                "\t${newAltitudeSourceMntMnsOrGps}" +
-                "\t${if (newAltitudeSourceMntMnsOrGps == "MNT" || newAltitudeSourceMntMnsOrGps == "MNS") altitudeMntMnsAccuracy else altitudeGpsAccuracy}" +
-                "\t${if (newAltitudeSourceMntMnsOrGps == "GPS")coordinatesOfMostProbableGpsAltitudeAsAltitudeAndProbability.y else if (newAltitudeSourceMntMnsOrGps == "MNT")coordinatesOfMostProbableMntAltitudeAsAltitudeAndProbability.y else coordinatesOfMostProbableMnsAltitudeAsAltitudeAndProbability.y}" +
-                "\t${newAltitude}" +
+                "\t${newGpsPoint.timestamp}" +
                 "\t${newDisplayedAltitude}" +
                 "\t${newVerticalSpeed}" +
-                "\t${newDisplayedVerticalSpeed}" +
-                "\t${newDisplayedVerticalSpeed2}" +
                 "\t${newDisplayedSpeed}" +
-                "\t${foundLastAltitudeLidarMnt}" +
-                "\t${foundLastAltitudeLidarMns}" +
-                "\t${foundLastAltitudeIgn}" +
-                "\t${foundLastAltitudeSrtm}" +
-                "\t${altitudeMntNewGpsPt}" +
-                "\t${altitudeMnsNewGpsPt}" +
-                "\t${altitudeGpsNewGpsPt}" +
-                "\t${newDurationHighSpreadAltitude}" +
-                "\t${newSlope}"
+                "\t${newSpeed}" +
+                "\t${newGpsPoint.speedGps}" +
+                "\t${newGpsPoint.speedAccuracy }" +
+                "\t${newGpsPoint.gpsPointMaxSpeed }"
     )
     return
 }

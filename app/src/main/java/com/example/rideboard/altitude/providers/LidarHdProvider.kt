@@ -40,7 +40,7 @@ class LidarHdProvider(
                 "?lon=$lon&lat=$lat&resource=ign_lidar_hd_mnx_mono_wld&zonly=false&measures=true"
 
         //debug pour tester le nombre de requetes simultanée, à enlever aussi dans le finally
-        AppConfig.activeAltitudeLidarRequests++
+        //AppConfig.activeAltitudeLidarRequests++
 
         val request = Request.Builder().url(url).build()
 
@@ -99,7 +99,8 @@ class LidarHdProvider(
                 null
             }
             finally {
-                AppConfig.activeAltitudeLidarRequests--
+                //debug: on enleve 1 dans tous les cas
+                //AppConfig.activeAltitudeLidarRequests--
             }
         }
     }

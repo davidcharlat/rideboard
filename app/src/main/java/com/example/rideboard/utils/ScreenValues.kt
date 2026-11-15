@@ -69,6 +69,7 @@ data class ScreenValues(
     val durationHRZ4: Int = 0,
     val durationHRZ5: Int = 0,
     val avgHR: Double = 0.0,
+    val heartRateBattery: Int? = null,
 
     /*
       var powerPercentRightLeft: Int? = null,
@@ -85,6 +86,7 @@ data class ScreenValues(
      */
 
     val power: Int? = null,
+    val totalPower: Int = 0,
     val avgPower: Double? = null,
     val screenPower4: Double = 0.0,
     val screenPower15: Double = 0.0,
@@ -98,17 +100,25 @@ data class ScreenValues(
     val durationPowerZ3: Long = 0,
     val durationPowerZ4: Long = 0,
     val durationPowerZ5: Long = 0,
-    val powerPercentRightLeft: Int? = null,
-    val powerTorque: Double? = null,
-    val powerCadence: Float? = null,
-    val pedalSmoothnessRight: Float? = null,
-    val pedalSmoothnessLeft: Float? = null,
-    val torqueEffectivenessRight: Float? = null,
-    val torqueEffectivenessLeft: Float? = null,
+    val smoothedPowerPercentRightLeft: Float? = null,
+    val maxPowerTorque: Double? = null,
+    //val pedalSmoothnessRight: Float? = null,
+    //val pedalSmoothnessLeft: Float? = null,
+    //val torqueEffectivenessRight: Float? = null,
+    //val torqueEffectivenessLeft: Float? = null,
     val powerBattery: Int? = null,
+    val averagePowerTorque: Double? = null,
 
     val outTemperature: Float? = null,
     val outHumidity: Float? = null,
+    val maxOutTemperature: Float? = null,
+    val minOutTemperature: Float? = null,
+    val avgOutTemperature: Float? = null,
+    val environmentBattery: Int? = null,
 
     val cadence: Int? = null,
+    val maxCadence: Int? = null,
+    val totalRevolutions: Int = 0,
+    val averageCadence: Float? = null,
+
 )

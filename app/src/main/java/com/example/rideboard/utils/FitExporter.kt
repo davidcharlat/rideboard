@@ -92,10 +92,10 @@ object FitExporter {
                         val presentElapsedTime = tokens[5].toFloat()
                         val presentSpeed = tokens[6].toFloat()
                         val presentTotalDistance = tokens[7].toFloat()
-                        val presentHeartRate = tokens[8].toFloatOrNull()?.toInt()?.toShort()
-                        val presentPower = tokens[9].toFloatOrNull()?.toInt()
-                        val presentCadence = tokens[10].toFloatOrNull()?.toInt()?.toShort()
-                        val presentOutTemperature = tokens[11].toFloatOrNull()?.toInt()?.toShort()
+                        val presentHeartRate = if (tokens.size > 8) tokens[8].toFloatOrNull()?.toInt()?.toShort() else null
+                        val presentPower = if (tokens.size > 9) tokens[9].toFloatOrNull()?.toInt() else null
+                        val presentCadence = if (tokens.size > 10) tokens[10].toFloatOrNull()?.toInt()?.toShort() else null
+                        val presentOutTemperature = if (tokens.size > 11) changeTemperaturetoShort(tokens[11].toFloatOrNull()) else null
 
                         // Ajustement automatique MS vs Secondes
                         // Si le timestamp est plus petit que 1000000000000, il est probablement déjà en secondes.
@@ -432,6 +432,14 @@ object FitExporter {
         }
     }
 
+}
+
+fun f(bool: Boolean) {}
+
+fun changeTemperaturetoShort(value: Float?): Short? {
+    if (value == null) return null
+    return if (value > 0.0) (value+0.499).toInt().toShort()
+    else (value-0.499).toInt().toShort()
 }
 
     /*
