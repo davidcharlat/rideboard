@@ -99,7 +99,7 @@ class MapScaleOverlay : Overlay() {
         drawLabel(canvas, "0", x0, textY)
         drawLabel(canvas, formatDistance(niceMeters), x1, textY)
         canvas.restore()
-    }3
+    }
 
     private fun drawLabel(canvas: Canvas, text: String, x: Float, y: Float) {
         canvas.drawText(text, x, y, textHaloPaint)
