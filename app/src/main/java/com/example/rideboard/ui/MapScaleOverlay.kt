@@ -86,6 +86,8 @@ class MapScaleOverlay : Overlay() {
         textHaloPaint.textSize = 13f * d
         textHaloPaint.strokeWidth = 3.5f * d
 
+        canvas.save()
+        canvas.rotate(-mapView.mapOrientation, w / 2f, h / 2f)   // annule la rotation de la carte : on dessine dans le repère de l'écran
         // Trait et deux repères, avec un halo blanc dessous pour rester lisible sur la carte
         for (paint in listOf(haloPaint, linePaint)) {
             canvas.drawLine(x0, y, x1, y, paint)
@@ -96,7 +98,8 @@ class MapScaleOverlay : Overlay() {
         val textY = y - tick - 4f * d
         drawLabel(canvas, "0", x0, textY)
         drawLabel(canvas, formatDistance(niceMeters), x1, textY)
-    }
+        canvas.restore()
+    }3
 
     private fun drawLabel(canvas: Canvas, text: String, x: Float, y: Float) {
         canvas.drawText(text, x, y, textHaloPaint)

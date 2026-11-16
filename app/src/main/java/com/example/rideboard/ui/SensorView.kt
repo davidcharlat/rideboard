@@ -138,6 +138,7 @@ fun SensorView(
             onToggleSensor = { sensorType ->
                 if (selectedSensors.contains(sensorType)) {
                     selectedSensors.remove(sensorType)
+                    AppConfig.sensorManager?.forget(sensorType) //cette ligne pour supprimer le scan sur les capteurs non affichés
                 } else {
                     selectedSensors.add(sensorType)
                     // Déclenche automatiquement la recherche par scan

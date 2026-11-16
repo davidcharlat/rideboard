@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.rideboard.AppSettings
@@ -43,8 +44,9 @@ import kotlin.math.min
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
-private enum class SettingsPage { MENU, ZONES, PREFERENCES, RINGING, EXPORT, DELETE, NAV_FILES }
+private enum class SettingsPage { MENU, ZONES, PREFERENCES, RINGING, EXPORT, DELETE, NAV_FILES, SENSORS, MAP }
 
 @Composable
 fun SetValuesScreen(
@@ -58,8 +60,7 @@ fun SetValuesScreen(
         page = when (page) {
             SettingsPage.MENU -> { onDone(); SettingsPage.MENU }
             SettingsPage.ZONES, SettingsPage.PREFERENCES -> SettingsPage.MENU
-            SettingsPage.RINGING, SettingsPage.EXPORT, SettingsPage.DELETE, SettingsPage.NAV_FILES -> SettingsPage.PREFERENCES
-        }
+            SettingsPage.RINGING, SettingsPage.EXPORT, SettingsPage.DELETE, SettingsPage.NAV_FILES, SettingsPage.SENSORS, SettingsPage.MAP -> SettingsPage.PREFERENCES        }
     }
 
     Surface(
@@ -78,6 +79,8 @@ fun SetValuesScreen(
                 onExport = { page = SettingsPage.EXPORT },
                 onDelete = { page = SettingsPage.DELETE },
                 onNavFiles = { page = SettingsPage.NAV_FILES },
+                onSensors = { page = SettingsPage.SENSORS },
+                onMap = { page = SettingsPage.MAP },
                 onBack = { page = SettingsPage.MENU }
             )
             SettingsPage.RINGING -> RingingPage(onBack = { page = SettingsPage.PREFERENCES })
@@ -87,6 +90,8 @@ fun SetValuesScreen(
                 currentPosition = currentPosition,
                 onBack = { page = SettingsPage.PREFERENCES }
             )
+            SettingsPage.SENSORS -> SensorsPage(onBack = { page = SettingsPage.PREFERENCES })
+            SettingsPage.MAP -> MapSettingsPage(onBack = { page = SettingsPage.PREFERENCES })
         }
     }
 }
@@ -209,7 +214,9 @@ private fun PreferencesPage(
     onExport: () -> Unit,
     onDelete: () -> Unit,
     onNavFiles: () -> Unit,
-    onBack: () -> Unit
+    onSensors: () -> Unit,
+    onMap: () -> Unit,
+    onBack: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -219,6 +226,8 @@ private fun PreferencesPage(
         Button(onClick = onDelete, modifier = Modifier.fillMaxWidth()) { Text("Supprimer des sorties") }
         Button(onClick = onRinging, modifier = Modifier.fillMaxWidth()) { Text("Sonnerie") }
         Button(onClick = onNavFiles, modifier = Modifier.fillMaxWidth()) { Text("Actualiser les fichiers de navigation") }
+        Button(onClick = onSensors, modifier = Modifier.fillMaxWidth()) { Text("Réglage du capteurs de température")}
+        Button(onClick = onMap, modifier = Modifier.fillMaxWidth()) { Text("rotation de la carte") }
         Spacer(Modifier.weight(1f))
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Retour") }
     }
@@ -633,5 +642,126 @@ private fun NavFilesPage(currentPosition: GeoPoint?, onBack: () -> Unit) {
                 TextButton(onClick = { confirm = false }) { Text("Annuler") }
             }
         )
+    }
+}
+
+//pour les reglages des sensors (thermometre)
+@Composable
+private fun SensorsPage(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var delaySeconds by remember { mutableStateOf(AppSettings.envRescanSeconds.coerceIn(5, 300).toFloat()) }
+    var correction by remember { mutableStateOf(AppSettings.tempCorrection) }
+
+    fun setCorrection(newValue: Float) {
+        val rounded = (Math.round(newValue * 10f) / 10f).coerceIn(-20f, 20f)
+        correction = rounded
+        AppSettings.tempCorrection = rounded
+        AppSettings.save(context)
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Thermomètre", style = MaterialTheme.typography.titleMedium)
+
+            Text("Lecture du thermomètre : toutes les ${delaySeconds.roundToInt()} s")
+            Slider(
+                value = delaySeconds,
+                onValueChange = { delaySeconds = it },
+                onValueChangeFinished = {
+                    AppSettings.envRescanSeconds = delaySeconds.roundToInt()
+                    AppSettings.save(context)
+                },
+                valueRange = 5f..300f,
+                steps = 58                                   // pas de 5 secondes
+            )
+            Text(
+                "Pendant l'enregistrement, le thermomètre est lu quelques secondes à cet intervalle. " +
+                        "Plus il est court, plus la batterie est sollicitée. Aucune lecture n'a lieu hors enregistrement.",
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            HorizontalDivider()
+
+            Text("Correction de température", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(onClick = { setCorrection(correction - 1f) }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) { Text("−1") }
+                OutlinedButton(onClick = { setCorrection(correction - 0.1f) }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) { Text("−0,1") }
+                Text(
+                    "%+.1f °C".format(correction),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1.5f)
+                )
+                OutlinedButton(onClick = { setCorrection(correction + 0.1f) }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) { Text("+0,1") }
+                OutlinedButton(onClick = { setCorrection(correction + 1f) }, modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp)) { Text("+1") }
+            }
+            TextButton(onClick = { setCorrection(0f) }) { Text("Remettre à zéro") }
+            Text(
+                "Cette valeur est ajoutée à toutes les températures d'ambiance enregistrées. " +
+                        "Elle ne modifie pas les sorties déjà enregistrées.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Retour") }
+    }
+}
+
+//pour l'orientation de la map
+@Composable
+private fun MapSettingsPage(onBack: () -> Unit) {
+    val context = LocalContext.current
+    var headingUp by remember { mutableStateOf(AppSettings.mapHeadingUp) }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Carte", style = MaterialTheme.typography.titleMedium)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("La carte tourne avec le cap")
+                Text(
+                    if (headingUp) "La flèche pointe toujours vers le haut, c'est la carte qui tourne."
+                    else "Le nord reste en haut, c'est la flèche qui tourne.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                checked = headingUp,
+                onCheckedChange = {
+                    headingUp = it
+                    AppSettings.mapHeadingUp = it
+                    AppSettings.save(context)
+                }
+            )
+        }
+
+        Text(
+            "Les noms de lieux sont dessinés dans les tuiles : ils tournent avec la carte.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Spacer(Modifier.weight(1f))
+        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("Retour") }
     }
 }

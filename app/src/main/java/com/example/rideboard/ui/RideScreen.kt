@@ -417,7 +417,8 @@ fun RideContent(
                         .border(1.dp, Color.DarkGray),
                     bottomInset = sensorBarHeight,
                     onNavClick = onNavClick,
-                    routeRemaining = routeRemaining
+                    routeRemaining = routeRemaining,
+                    speed = screenValues.speed
                 )
             } else {
                 Box(

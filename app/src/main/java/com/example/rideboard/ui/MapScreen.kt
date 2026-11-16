@@ -1,10 +1,8 @@
 package com.example.rideboard.ui
 
-import android.R.attr.maxWidth
 import android.view.MotionEvent
 import android.view.View
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -40,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.example.rideboard.AppSettings
 import com.example.rideboard.R
 import com.example.rideboard.RideViewModel
 import com.example.rideboard.config.AppConfig
@@ -48,8 +47,8 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import kotlin.math.max
 
+private const val MIN_SPEED_FOR_ROTATION = 1.0     // m/s (environ 3,6 km/h)
 
 @Composable
 fun MapScreen(
@@ -64,7 +63,8 @@ fun MapScreen(
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
     onNavClick: () -> Unit = {},
-    routeRemaining: RideViewModel.RouteRemaining? = null
+    routeRemaining: RideViewModel.RouteRemaining? = null,
+    speed: Double = 0.0
 ) {
     val scaleOverlay = remember { MapScaleOverlay() }
     val bottomInsetPx = with(LocalDensity.current) { bottomInset.toPx() }
@@ -76,10 +76,9 @@ fun MapScreen(
             setTileSource(TileSourceFactory.OpenTopo)  //MAPNIK
             setMultiTouchControls(true)
             controller.setZoom(AppConfig.mapZoom)
-
-            // mapOrientation reste à sa valeur par défaut (0 = nord en haut)
         }
     }
+    val headingUp = AppSettings.mapHeadingUp
 
     LaunchedEffect(isToggleBlocked) {
         mapView.setMultiTouchControls(!isToggleBlocked)
@@ -123,11 +122,19 @@ fun MapScreen(
 
     var autoRecenter by remember { mutableStateOf(true) }
 
-    LaunchedEffect(latitude, longitude, direction, autoRecenter) {
+    LaunchedEffect(latitude, longitude, direction, autoRecenter, headingUp) {
         val compassBearing = mathAngleToCompassBearing(direction)
 
         positionMarker.position = GeoPoint(latitude, longitude)
-        positionMarker.rotation = compassBearing // la flèche pointe selon le cap réel
+        if (headingUp) {
+            positionMarker.rotation = 0f                      // la flèche pointe toujours vers le haut de l'écran
+            if (speed >= MIN_SPEED_FOR_ROTATION) {            // à l'arrêt, on garde l'orientation précédente
+                mapView.mapOrientation = compassBearing
+            }
+        } else {
+            positionMarker.rotation = compassBearing          // la flèche pointe selon le cap réel
+            mapView.mapOrientation = 0f                       // nord en haut
+        }
         mapView.invalidate()
 
         if (autoRecenter) {

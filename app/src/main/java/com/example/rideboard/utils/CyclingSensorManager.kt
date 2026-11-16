@@ -13,10 +13,10 @@ import android.os.Looper
 import android.os.ParcelUuid
 import android.os.SystemClock
 import android.util.Log
-import android.util.SparseArray
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.core.util.isEmpty
 import androidx.core.util.size
+import com.example.rideboard.AppSettings
 import com.example.rideboard.buffer.GpsBuffer
 import com.example.rideboard.config.AppConfig
 import java.util.Collections
@@ -35,7 +35,8 @@ enum class SensorConnectionStatus { DISCONNECTED, SCANNING, CONNECTED, LOST }
  *   1. Constantes
  *   2. État public (valeurs et statuts lus par le reste de l'appli)
  *   3. État interne
- *   4. API publique : startScan, stopScan, release, applyCachedSensorValuesToGpsBuffer
+ *   4. API publique : startScan, stopScan, forget, release
+ *   4b. Supervision : reconnexions et scans périodiques (uniquement pendant l'enregistrement)
  *   5. Scan : détection des appareils
  *   6. Connexion GATT : callbacks, découverte des services
  *   7. Abonnements aux notifications (file d'écriture des descripteurs)
@@ -116,8 +117,9 @@ class CyclingSensorManager(private val context: Context) {
         val ENVIRONMENT_BROADCAST_NAME_HINTS = listOf("govee", "h5074", "inkbird", "ith", "ibs")
 
         const val ENV_SCAN_WINDOW_MS = 15_000L      // durée d'un scan périodique du capteur d'ambiance
-        const val ENV_RESCAN_DELAY_MS = 5_000L    // pause entre deux scans périodiques
-        const val ENV_STALE_MS = 5 * 60 * 1000L    // au-delà, la mesure est considérée périmée
+        // La pause entre deux scans du capteur d'ambiance est réglable : AppSettings.envRescanSeconds
+        const val ENV_STALE_MS = 5 * 60 * 1000L     // sans mesure valide au-delà (et d'au moins 3 pauses), les valeurs sont effacées
+        const val SUPERVISOR_PERIOD_MS = 2_000L     // cadence de vérification des capteurs à reconnecter
     }
 
     // =====================================================================
@@ -136,6 +138,14 @@ class CyclingSensorManager(private val context: Context) {
         private set
     var envHumidity: Float? = null
         private set
+
+    /** Température d'ambiance corrigée (réglage AppSettings.tempCorrection) si la mesure est récente, sinon null. */
+    val freshEnvTemperature: Float?
+        get() = if (isEnvFresh()) envTemperature?.let { it + AppSettings.tempCorrection } else null
+
+    /** Humidité d'ambiance si la mesure est récente, sinon null. */
+    val freshEnvHumidity: Float?
+        get() = if (isEnvFresh()) envHumidity else null
 
     // =====================================================================
     // 3. ÉTAT INTERNE
@@ -159,6 +169,11 @@ class CyclingSensorManager(private val context: Context) {
     @Volatile private var scanToken = 0                       // identifie le scan en cours (pour sa minuterie)
     private val rejectedAddresses = Collections.synchronizedSet(mutableSetOf<String>())
     @Volatile private var envLockedAddress: String? = null    // capteur d'ambiance retenu (évite de mélanger plusieurs capteurs)
+
+    // --- Supervision (reconnexions et scans périodiques, uniquement pendant l'enregistrement)
+    private val wantedSensors = Collections.synchronizedSet(mutableSetOf<SensorType>())   // capteurs demandés par l'utilisateur
+    private val scanEndedAt = ConcurrentHashMap<SensorType, Long>()                       // fin du dernier scan, par capteur
+    private var supervisorStarted = false
 
     //peremption de données
     @Volatile private var envUpdatedAt = 0L
@@ -202,19 +217,16 @@ class CyclingSensorManager(private val context: Context) {
         }
     }
 
-    /** Un capteur d'ambiance qui diffuse n'est lu que pendant un scan : on en relance un régulièrement. */
-    private val envRescan = Runnable {
-        when {
-            envLockedAddress == null -> {}                                  // capteur oublié : rien à rafraîchir
-            isScanning -> scheduleEnvironmentRescan()                       // un autre scan est en cours : plus tard
-            else -> startScan(SensorType.ENVIRONMENT, userRequested = false)
+    /** Vérifie régulièrement quels capteurs doivent être recherchés à nouveau (voir supervise). */
+    private val supervisor = object : Runnable {
+        override fun run() {
+            try {
+                supervise()
+            } catch (e: Exception) {
+                Log.e(TAG, "Erreur supervise", e)
+            }
+            handler.postDelayed(this, SUPERVISOR_PERIOD_MS)
         }
-    }
-
-    private fun scheduleEnvironmentRescan() {
-        if (envLockedAddress == null) return
-        handler.removeCallbacks(envRescan)
-        handler.postDelayed(envRescan, ENV_RESCAN_DELAY_MS)
     }
 
     // =====================================================================
@@ -223,29 +235,39 @@ class CyclingSensorManager(private val context: Context) {
 
     /**
      * Lance la recherche d'un capteur du type demandé.
-     * @param userRequested false pour un re-scan automatique : on garde alors la liste des appareils écartés.
+     * @param userRequested true pour une demande de l'utilisateur (bouton) : la liste des appareils écartés est
+     *        remise à zéro. false pour la suite automatique d'une recherche (appareil écarté : on cherche le bon).
+     * @param background true pour un scan de fond (reconnexion, rafraîchissement du thermomètre) : il n'a jamais
+     *        lieu hors enregistrement et ne coupe jamais un scan en cours.
      */
     @SuppressLint("MissingPermission")
-    fun startScan(type: SensorType, userRequested: Boolean = true) {
+    fun startScan(type: SensorType, userRequested: Boolean = true, background: Boolean = false) {
         try {
+            if (background && !AppConfig.isRecording) return
+
             if (userRequested) {
                 rejectedAddresses.clear()
                 if (type == SensorType.ENVIRONMENT) envLockedAddress = null
+                wantedSensors.add(type)
+                ensureSupervisor()
             }
             if (activeGatts[type] != null) {
                 Log.d(TAG, "$type : connexion déjà en cours ou établie. Scan ignoré.")
                 return
             }
 
-            if (isScanning) stopScan()
+            if (isScanning) {
+                if (background) return        // un scan de fond n'interrompt pas un scan en cours
+                stopScan()
+            }
             val scanner = bluetoothAdapter?.bluetoothLeScanner ?: return
 
             currentScanningType = type
             isScanning = true
 
-// Un scan périodique du capteur d'ambiance ne change pas le statut (le point reste vert)
-            val periodicEnvironmentScan = type == SensorType.ENVIRONMENT && !userRequested && envLockedAddress != null
-            if (!periodicEnvironmentScan) {
+            // Un scan de rafraîchissement du thermomètre ne change pas le statut du bouton
+            val quiet = background && type == SensorType.ENVIRONMENT
+            if (!quiet) {
                 handler.post { sensorStatuses[type] = SensorConnectionStatus.SCANNING }
             }
             Log.d(TAG, "Démarrage scan pour $type...")
@@ -255,15 +277,12 @@ class CyclingSensorManager(private val context: Context) {
                 .build()
             scanner.startScan(null, settings, scanCallback)
 
-            val windowMs = if (periodicEnvironmentScan) ENV_SCAN_WINDOW_MS else SCAN_TIMEOUT_MS
+            // La minuterie ne concerne que CE scan : un scan plus récent n'est pas interrompu par elle
+            val windowMs = if (quiet) ENV_SCAN_WINDOW_MS else SCAN_TIMEOUT_MS
             val token = ++scanToken
             handler.postDelayed({
-                if (isScanning && scanToken == token) {
-                    stopScan()
-                    if (type == SensorType.ENVIRONMENT) scheduleEnvironmentRescan()
-                }
+                if (isScanning && scanToken == token) stopScan()
             }, windowMs)
-
         } catch (e: Exception) {
             Log.e(TAG, "Crash dans startScan", e)
             isScanning = false
@@ -283,11 +302,12 @@ class CyclingSensorManager(private val context: Context) {
             isScanning = false
 
             val type = currentScanningType
+            if (type != null) scanEndedAt[type] = SystemClock.elapsedRealtime()
+
             if (!connecting && type != null && sensorStatuses[type] == SensorConnectionStatus.SCANNING) {
                 if (AppConfig.isRecording && everConnected.contains(type) && activeGatts[type] == null) {
                     handler.post { sensorStatuses[type] = SensorConnectionStatus.LOST }
-                    Log.d(TAG, "Scan $type infructueux, passage en LOST (re-scan dans 5s)")
-                    handler.postDelayed({ startScan(type, userRequested = false) }, RESCAN_DELAY_MS)
+                    Log.d(TAG, "Scan $type infructueux, passage en LOST (le superviseur réessaiera)")
                 } else {
                     handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
                     Log.d(TAG, "Scan $type terminé sans connexion, retour à DISCONNECTED")
@@ -299,12 +319,36 @@ class CyclingSensorManager(private val context: Context) {
         }
     }
 
+    /** L'utilisateur retire un capteur de la barre : on le déconnecte et on ne le recherche plus. */
+    @SuppressLint("MissingPermission")
+    fun forget(type: SensorType) {
+        wantedSensors.remove(type)
+        everConnected.remove(type)
+        if (isScanning && currentScanningType == type) stopScan(connecting = true)
+        activeGatts.remove(type)?.let { try { it.disconnect(); it.close() } catch (_: Exception) {} }
+        sensorValues.remove(type)
+        batteryLevels.remove(type)
+        when (type) {
+            SensorType.POWER -> clearPowerCache()
+            SensorType.CADENCE -> clearCadenceCache()
+            SensorType.ENVIRONMENT -> {
+                envLockedAddress = null
+                envTemperature = null
+                envHumidity = null
+                envUpdatedAt = 0L
+            }
+            SensorType.HEART_RATE -> {}
+        }
+        handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
+    }
+
     /** Ferme toutes les connexions et remet l'état à zéro (à appeler quand on quitte l'appli). */
     @SuppressLint("MissingPermission")
     fun release() {
         try { stopScan(connecting = true) } catch (_: Exception) {}
         isScanning = false
         handler.removeCallbacksAndMessages(null)
+        supervisorStarted = false
         synchronized(descriptorWriteQueue) {
             descriptorWriteQueue.clear()
             isWritingDescriptor = false
@@ -314,16 +358,78 @@ class CyclingSensorManager(private val context: Context) {
         sensorValues.clear()
         batteryLevels.clear()
         everConnected.clear()
+        wantedSensors.clear()
+        scanEndedAt.clear()
         firstNotification.clear()
         rejectedAddresses.clear()
         envLockedAddress = null
         envTemperature = null
         envHumidity = null
+        envUpdatedAt = 0L
         clearPowerCache()
         clearCadenceCache()
         SensorType.entries.forEach { sensorStatuses[it] = SensorConnectionStatus.DISCONNECTED }
-        envUpdatedAt = 0L
     }
+
+    // =====================================================================
+    // 4b. SUPERVISION : RECONNEXIONS ET SCANS PÉRIODIQUES
+    // =====================================================================
+
+    private fun ensureSupervisor() {
+        if (supervisorStarted) return
+        supervisorStarted = true
+        handler.postDelayed(supervisor, SUPERVISOR_PERIOD_MS)
+    }
+
+    /**
+     * Appelé toutes les SUPERVISOR_PERIOD_MS, sur le thread principal.
+     * Hors enregistrement, il ne lance AUCUN scan : la liste des capteurs demandés est conservée, et les
+     * reconnexions reprennent dès que l'enregistrement démarre.
+     */
+    private fun supervise() {
+        checkEnvironmentFreshness()
+
+        if (!AppConfig.isRecording || isScanning) return
+        val now = SystemClock.elapsedRealtime()
+
+        for (type in wantedSensors.toList()) {
+            if (activeGatts[type] != null) continue                       // connexion établie ou en cours
+
+            val lastEnd = scanEndedAt[type] ?: 0L
+            val broadcastSensor = type == SensorType.ENVIRONMENT && envLockedAddress != null
+            val due = when {
+                broadcastSensor -> now - lastEnd >= envRescanMs()         // capteur qui diffuse : lecture périodique
+                everConnected.contains(type) -> now - lastEnd >= RESCAN_DELAY_MS   // capteur déjà connecté, perdu
+                else -> false                                             // jamais trouvé : pas de recherche automatique
+            }
+            if (due) {
+                Log.d(TAG, if (broadcastSensor) "Scan périodique du capteur d'ambiance" else "Nouvelle tentative de connexion $type")
+                startScan(type, userRequested = false, background = true)
+                return
+            }
+        }
+    }
+
+    /** Sans mesure valide depuis trop longtemps : on efface les valeurs (écran et buffer) et le bouton quitte le vert. */
+    private fun checkEnvironmentFreshness() {
+        if (envUpdatedAt == 0L || isEnvFresh()) return
+
+        if (envTemperature != null || envHumidity != null) {
+            Log.w(TAG, "Mesures d'ambiance périmées (plus de ${envStaleMs() / 1000} s) : effacées")
+            envTemperature = null
+            envHumidity = null
+            applyCachedSensorValuesToGpsBuffer()                          // écrit null dans le dernier échantillon
+        }
+        val status = sensorStatuses[SensorType.ENVIRONMENT]
+        if (status == SensorConnectionStatus.CONNECTED && activeGatts[SensorType.ENVIRONMENT] == null) {
+            sensorStatuses[SensorType.ENVIRONMENT] =
+                if (AppConfig.isRecording) SensorConnectionStatus.LOST else SensorConnectionStatus.DISCONNECTED
+        }
+    }
+
+    private fun envRescanMs(): Long = AppSettings.envRescanSeconds.coerceAtLeast(5) * 1000L
+    private fun envStaleMs(): Long = maxOf(ENV_STALE_MS, 3 * envRescanMs() + ENV_SCAN_WINDOW_MS)
+    private fun isEnvFresh(): Boolean = envUpdatedAt != 0L && SystemClock.elapsedRealtime() - envUpdatedAt < envStaleMs()
 
     // =====================================================================
     // 5. SCAN : DÉTECTION DES APPAREILS
@@ -342,6 +448,8 @@ class CyclingSensorManager(private val context: Context) {
                 // Les capteurs d'ambiance qui diffusent dans leur annonce sont lus sans connexion
                 if (scanType == SensorType.ENVIRONMENT) {
                     parseEnvironmentBroadcast(device.address, result.scanRecord, name)
+                    // Un capteur qui diffuse est déjà retenu : on ne se connecte à aucun autre thermomètre trouvé
+                    if (envLockedAddress != null) return
                 }
 
                 if (!matchesSensor(scanType, serviceUuids, name)) return
@@ -605,10 +713,10 @@ class CyclingSensorManager(private val context: Context) {
         if (type == SensorType.POWER) clearPowerCache()
         if (type == SensorType.CADENCE) clearCadenceCache()
 
+        scanEndedAt[type] = SystemClock.elapsedRealtime()                 // la prochaine tentative aura lieu après RESCAN_DELAY_MS
         if (AppConfig.isRecording && everConnected.contains(type)) {
             handler.post { sensorStatuses[type] = SensorConnectionStatus.LOST }
-            Log.i(TAG, "Perte de connexion $type pendant la sortie, re-scan dans 5s...")
-            handler.postDelayed({ startScan(type, userRequested = false) }, RESCAN_DELAY_MS)
+            Log.i(TAG, "Perte de connexion $type pendant la sortie : le superviseur réessaiera")
         } else {
             handler.post { sensorStatuses[type] = SensorConnectionStatus.DISCONNECTED }
         }
@@ -942,9 +1050,13 @@ class CyclingSensorManager(private val context: Context) {
             batteryLevels[SensorType.CADENCE]?.let { sample.cadenceBattery = it }
             batteryLevels[SensorType.ENVIRONMENT]?.let { sample.environmentBattery = it }
 
-            if (SystemClock.elapsedRealtime() - envUpdatedAt < ENV_STALE_MS) {
-                envTemperature?.let { sample.outTemperature = it }
+            // Ambiance : mesures récentes (avec la correction de température du réglage) ; périmées : on efface
+            if (isEnvFresh()) {
+                envTemperature?.let { sample.outTemperature = it + AppSettings.tempCorrection }
                 envHumidity?.let { sample.outHumidity = it }
+            } else if (envUpdatedAt != 0L) {
+                sample.outTemperature = null
+                sample.outHumidity = null
             }
         }
     }
